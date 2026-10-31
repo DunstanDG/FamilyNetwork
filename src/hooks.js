@@ -40,3 +40,6 @@ export function useInstallPrompt() {
   };
   return { canInstall: Boolean(event), install };
 }
+
+// Open one post in a sheet from anywhere (a digest row, a notification).
+export const openPost = (postId) => window.dispatchEvent(new CustomEvent('fn:open-post', { detail: postId }));

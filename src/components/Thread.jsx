@@ -47,7 +47,7 @@ function Comment({ comment, isReply, onReply }) {
         <div className="comment-bubble">
           <p className="who">
             <strong>{(comment.author || {}).display_name || 'Someone'}</strong>
-            <span className="when">{pending ? 'Sending…' : ago(comment.created_at)}{comment.edited_at ? ' · edited' : ''}</span>
+            <span className="when">{pending ? 'Sending…' : ago(comment.created_at)}{comment.edited_at ? ' · edited' : ''}{comment.photo_asset_id && !isReply ? ' · 📷 on a photo' : ''}</span>
           </p>
           {editing ? (
             <>

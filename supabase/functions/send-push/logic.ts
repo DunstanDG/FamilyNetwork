@@ -19,7 +19,13 @@ export function isMuted(mutedKinds: string[] | null | undefined, module: string)
   return Array.isArray(mutedKinds) && mutedKinds.includes(module);
 }
 
+// Sent by nobody in particular: the calendar deciding by itself, or a day-before reminder.
+const SYSTEM_TITLES: Partial<Record<Notification['kind'], string>> = { event: 'Family plans', vote: 'Family plans', album: 'New photos' };
+
 export function buildPayload(n: Notification, actorName: string | null | undefined) {
+  if (!actorName && SYSTEM_TITLES[n.kind]) {
+    return { title: SYSTEM_TITLES[n.kind]!, body: (n.snippet || '').slice(0, 140), postId: n.post_id, tag: n.post_id ? `post-${n.post_id}` : undefined };
+  }
   const who = (actorName || 'Someone').slice(0, 40);
   const title = (TITLES[n.kind] ?? (() => `${who} did something`))(who);
   return {

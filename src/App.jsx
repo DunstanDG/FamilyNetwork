@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth.jsx';
 import { MembersProvider } from './members.jsx';
 import { OutboxProvider } from './outbox.jsx';
+import { MiniPlayer, PlayerProvider } from './player.jsx';
+import { takeShare } from './shareTarget.js';
 import { supabase } from './supabase.js';
 import { countUnread } from './data.js';
 import { MODULES } from './lib/timeline.js';
@@ -12,7 +14,8 @@ import Onboarding from './components/Onboarding.jsx';
 import People from './components/People.jsx';
 import Settings from './components/Settings.jsx';
 import { NotificationsSheet, PostSheet } from './components/Alerts.jsx';
-import { PersonAvatar } from './components/ui.jsx';
+import { PersonAvatar, Sheet } from './components/ui.jsx';
+import Composer from './components/Composer.jsx';
 
 const TAB_KEY = 'fn-tab';
 const readTab = () => {
@@ -26,6 +29,7 @@ function Shell() {
   const [sheet, setSheet] = useState(null); // 'people' | 'settings' | 'alerts'
   const [postId, setPostId] = useState(() => new URLSearchParams(window.location.search).get('post'));
   const [unread, setUnread] = useState(0);
+  const [shared, setShared] = useState(() => takeShare());
 
   // A link from a notification opens that post; tidy the address afterwards.
   useEffect(() => {
@@ -35,8 +39,10 @@ function Shell() {
       window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     }
     const onMessage = (e) => { if (e.data?.type === 'open-post' && e.data.postId) setPostId(e.data.postId); };
+    const onOpen = (e) => { if (e.detail) setPostId(e.detail); };
     navigator.serviceWorker?.addEventListener('message', onMessage);
-    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+    window.addEventListener('fn:open-post', onOpen);
+    return () => { navigator.serviceWorker?.removeEventListener('message', onMessage); window.removeEventListener('fn:open-post', onOpen); };
   }, []);
 
   const refreshUnread = useCallback(async () => {
@@ -84,6 +90,8 @@ function Shell() {
         <Feed key={module.id} module={module} />
       </main>
 
+      <MiniPlayer />
+
       <nav className="tabs" aria-label="Sections">
         {MODULES.map((m) => (
           <button key={m.id} className={m.id === tab ? 'on' : ''} aria-current={m.id === tab ? 'page' : undefined} onClick={() => choose(m.id)}>
@@ -102,6 +110,11 @@ function Shell() {
         />
       )}
       {postId && <PostSheet postId={postId} onClose={closePost} />}
+      {shared && (
+        <Sheet title="Share with the family" onClose={() => setShared(null)}>
+          <Composer initial={shared} onPosted={() => setShared(null)} />
+        </Sheet>
+      )}
       {needsOnboarding && <Onboarding onDone={finishOnboarding} />}
     </>
   );
@@ -119,7 +132,9 @@ function Gate() {
       return (
         <MembersProvider>
           <OutboxProvider>
-            <Shell />
+            <PlayerProvider>
+              <Shell />
+            </PlayerProvider>
           </OutboxProvider>
         </MembersProvider>
       );

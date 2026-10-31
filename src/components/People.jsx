@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth.jsx';
 import { useMembers } from '../members.jsx';
 import { appUrl } from '../supabase.js';
-import { createHousehold, createInvite, deleteInvite, fetchInvites, removeMember, updateMember } from '../data.js';
+import { createHousehold, createInvite, deleteInvite, fetchInvites, linkHomequest, removeMember, updateMember } from '../data.js';
 import { Message, PersonAvatar, Sheet } from './ui.jsx';
 
 const ROLE_LABEL = { admin: 'Admin', adult: 'Adult', child: 'Child' };
@@ -190,7 +190,20 @@ export default function People({ onClose }) {
       {admin && (
         <section>
           <h3>Households</h3>
-          <p className="hint">Group people who live together. Used later to share plans with HomeQuest.</p>
+          <p className="hint">Group people who live together. A household that uses HomeQuest can add confirmed plans to it (each person chooses, event by event).</p>
+          <ul className="plain">
+            {households.map((h) => (
+              <li key={h.id}>
+                <label className="toggle">
+                  <input type="checkbox" checked={Boolean(h.homequest_linked)} onChange={async (e) => {
+                    const { error: err } = await linkHomequest(h.id, e.target.checked);
+                    setError(err ? err.message : ''); reload();
+                  }} />
+                  <span>{h.name} uses HomeQuest</span>
+                </label>
+              </li>
+            ))}
+          </ul>
           <form className="row" onSubmit={addHousehold}>
             <input className="field" aria-label="New household name" placeholder="Household name" maxLength={60} value={house} onChange={(e) => setHouse(e.target.value)} />
             <button className="primary" disabled={!house.trim()}>Add</button>

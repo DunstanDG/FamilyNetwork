@@ -1,50 +1,16 @@
-// Runs the real migration against an in-process Postgres (PGlite) with a stub of Supabase's `auth`
+// Runs the real migrations against an in-process Postgres (PGlite) with a stub of Supabase's `auth`
 // schema, then checks the row-level security rules by impersonating different people.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
-
-const ADMIN = '00000000-0000-4000-8000-000000000001';
-const ADULT = '00000000-0000-4000-8000-000000000002';
-const CHILD = '00000000-0000-4000-8000-000000000003';
-const STRANGER = '00000000-0000-4000-8000-000000000004';
+import { ADMIN, ADULT, CHILD, STRANGER, actor, denied, makeDb, seedPeople } from './helpers.js';
 
 let db;
-
-async function as(uid, fn, role = 'authenticated') {
-  return db.transaction(async (tx) => {
-    if (uid) await tx.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
-    await tx.exec(`set local role ${role}`);
-    return fn(tx);
-  });
-}
-const rows = async (uid, sql, params = []) => (await as(uid, (tx) => tx.query(sql, params))).rows;
-const denied = (promise) => expect(promise).rejects.toThrow();
+let as;
+let rows;
 
 beforeAll(async () => {
-  db = new PGlite();
-  await db.exec(`
-    create role anon nologin; create role authenticated nologin; create role service_role nologin;
-    create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb not null default '{}');
-    create function auth.uid() returns uuid language sql stable
-      as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    grant usage on schema auth to anon, authenticated, service_role;
-    create publication supabase_realtime;
-  `);
-  await db.exec(readFileSync(new URL('../../supabase/migrations/0001_family_network.sql', import.meta.url), 'utf8'));
-  await db.exec(`
-    insert into auth.users (id, email, raw_user_meta_data) values
-      ('${ADMIN}', 'admin@example.com', '{"avatar_url":"https://example.com/a.png"}'),
-      ('${ADULT}', 'adult@example.com', '{}'),
-      ('${CHILD}', 'child@example.com', '{}'),
-      ('${STRANGER}', 'stranger@example.com', '{"avatar_url":"https://example.com/s.png"}');
-    insert into family.households (id, name) values ('10000000-0000-4000-8000-000000000001', 'Home');
-    insert into family.profiles (id, display_name, role, household_id) values
-      ('${ADMIN}', 'Admin', 'admin', '10000000-0000-4000-8000-000000000001'),
-      ('${ADULT}', 'Adult', 'adult', null),
-      ('${CHILD}', 'Child', 'child', '10000000-0000-4000-8000-000000000001');
-  `);
+  db = await makeDb();
+  await seedPeople(db);
+  ({ as, rows } = actor(db));
 });
 
 describe('outsiders', () => {

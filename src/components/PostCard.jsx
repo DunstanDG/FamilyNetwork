@@ -4,23 +4,34 @@ import { useMembers } from '../members.jsx';
 import { editPost, removePost, setPinned } from '../data.js';
 import { extractMentions } from '../lib/mentions.js';
 import { ago, canEdit } from '../lib/time.js';
-import { KIND_LABEL, normaliseLink } from '../lib/timeline.js';
+import { KIND_LABEL } from '../lib/timeline.js';
 import { notifyChanged } from '../hooks.js';
 import MentionTextarea from './MentionTextarea.jsx';
 import Reactions from './Reactions.jsx';
 import Thread, { PendingNote } from './Thread.jsx';
 import { Body, Message, PersonAvatar } from './ui.jsx';
+import { DigestBlock, EpisodeBlock, LinkPreview, SourceFace, VideoBlock } from './cards.jsx';
+import { AlbumBlock } from './Photos.jsx';
+import { EventBlock } from './Calendar.jsx';
 
-function LinkCard({ url }) {
-  const safe = normaliseLink(url);
-  if (!safe) return null;
-  const host = new URL(safe).hostname.replace(/^www\./, '');
-  return (
-    <a className="linkcard" href={safe} target="_blank" rel="noopener noreferrer">
-      <span className="linkcard-host">🔗 {host}</span>
-      <span className="linkcard-url">{safe}</span>
-    </a>
-  );
+// What goes between the header and the reactions, by kind of post.
+function PostBody({ post }) {
+  const p = post.payload || {};
+  switch (post.kind) {
+    case 'link': return <LinkPreview url={p.url} preview={p.preview} />;
+    case 'video': return <VideoBlock payload={p} />;
+    case 'podcast_episode': return <EpisodeBlock post={post} />;
+    case 'digest': return <DigestBlock post={post} />;
+    case 'photo_album': return <AlbumBlock post={post} />;
+    case 'event': return <EventBlock post={post} />;
+    default:
+      return (
+        <>
+          {post.photos?.length > 0 && <AlbumBlock post={post} />}
+          {p.link?.url && <LinkPreview url={p.link.url} preview={p.link.preview} />}
+        </>
+      );
+  }
 }
 
 export default function PostCard({ post, highlight = false }) {
@@ -36,11 +47,15 @@ export default function PostCard({ post, highlight = false }) {
   const mine = post.author_id === profile.id;
   const admin = profile.role === 'admin';
   const replyCount = comments.length;
+  const system = !post.author_id && !pending;
   const author = post.author || members.find((m) => m.id === post.author_id);
+  const name = system
+    ? (post.kind === 'digest' ? 'New from your shows' : post.payload?.source_title || 'From your shows')
+    : author?.display_name || 'Someone';
 
   async function save() {
     const body = draft.trim();
-    const hasLink = Boolean(post.payload?.link?.url);
+    const hasLink = Boolean(post.payload?.link?.url || post.payload?.url);
     if (!body && !hasLink) return;
     const { error: err } = await editPost(post.id, { body, mentions: extractMentions(body, members) });
     if (err) return setError(err.message);
@@ -68,13 +83,13 @@ export default function PostCard({ post, highlight = false }) {
   return (
     <article className={`post ${post.pinned ? 'pinned' : ''} ${pending ? 'pending' : ''}`} id={`p-${post.id}`}>
       <header className="post-head">
-        <PersonAvatar person={author} />
+        {system ? <SourceFace post={post} /> : <PersonAvatar person={author} />}
         <div className="post-who">
-          <strong>{author?.display_name || 'Someone'}</strong>
+          <strong>{name}</strong>
           <span className="when">
             {pending ? 'Sending…' : ago(post.created_at)}
             {post.edited_at ? ' · edited' : ''}
-            {post.kind !== 'update' ? ` · ${KIND_LABEL[post.kind]}` : ''}
+            {post.kind !== 'update' && post.kind !== 'digest' ? ` · ${KIND_LABEL[post.kind]}` : ''}
           </span>
         </div>
         {post.pinned && <span className="badge">📌 Pinned</span>}
@@ -102,7 +117,7 @@ export default function PostCard({ post, highlight = false }) {
         <Body text={post.body} />
       )}
 
-      {post.payload?.link?.url && <LinkCard url={post.payload.link.url} />}
+      <PostBody post={post} />
       <Message tone="error">{error}</Message>
 
       {pending ? (

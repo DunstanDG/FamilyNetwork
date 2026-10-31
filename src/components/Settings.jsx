@@ -3,6 +3,7 @@ import { useAuth } from '../auth.jsx';
 import { useInstallPrompt } from '../hooks.js';
 import { disablePush, enablePush, isIos, isStandalone, pushState } from '../push.js';
 import ModuleToggles from './NotificationSettings.jsx';
+import { downloadMyPhotos, photosConfigured } from '../photos.js';
 import { Message, PersonAvatar, Sheet } from './ui.jsx';
 
 export function PushControls() {
@@ -52,6 +53,22 @@ export function PushControls() {
   );
 }
 
+function MyPhotos() {
+  const [state, setState] = useState({ busy: false, note: '' });
+  async function go() {
+    setState({ busy: true, note: 'Gathering your photos. This can take a few minutes…' });
+    try { await downloadMyPhotos(); setState({ busy: false, note: '' }); } catch (e) { setState({ busy: false, note: e.message }); }
+  }
+  return (
+    <>
+      <h3>Your photos</h3>
+      <p className="hint">Download every photo you’ve shared, as the original files, in one zip.</p>
+      <button className="mini wide" onClick={go} disabled={state.busy}>⤓ Download my photos</button>
+      <Message>{state.note}</Message>
+    </>
+  );
+}
+
 export default function Settings({ onClose }) {
   const { profile, session, updateProfile, signOut } = useAuth();
   const { canInstall, install } = useInstallPrompt();
@@ -96,6 +113,8 @@ export default function Settings({ onClose }) {
               : 'Use your browser’s menu and choose “Install app” or “Add to Home screen”.'}</p>}
         </>
       )}
+
+      {photosConfigured && <MyPhotos />}
 
       <button className="mini wide signout" onClick={signOut}>Sign out</button>
     </Sheet>
