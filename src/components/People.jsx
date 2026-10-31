@@ -197,7 +197,8 @@ export default function People({ onClose }) {
                 <label className="toggle">
                   <input type="checkbox" checked={Boolean(h.homequest_linked)} onChange={async (e) => {
                     const { error: err } = await linkHomequest(h.id, e.target.checked);
-                    setError(err ? err.message : ''); reload();
+                    setError(!err ? '' : err.code === '23505' ? 'Only one household can use HomeQuest. Untick the other one first.' : err.message);
+                    reload();
                   }} />
                   <span>{h.name} uses HomeQuest</span>
                 </label>

@@ -4,11 +4,24 @@
 -- Needs the pg_cron and pg_net extensions: Database -> Extensions -> enable both.
 
 -- 1. Keep the two values the feed job needs in Vault (encrypted, not in this file).
---    Replace the placeholders, run these two lines once, then remove your values from the editor.
-select vault.create_secret('https://REPLACE-YOUR-PROJECT.supabase.co', 'family_project_url')
-where not exists (select 1 from vault.secrets where name = 'family_project_url');
-select vault.create_secret('REPLACE-WITH-THE-SAME-CRON_SECRET-AS-THE-FUNCTION', 'family_cron_secret')
-where not exists (select 1 from vault.secrets where name = 'family_cron_secret');
+--    Replace the two placeholders, run, then clear your values from the editor. Re-running with new
+--    values updates them; running with the placeholders still in stops with an error.
+do $$
+declare
+  project_url text := 'https://REPLACE-YOUR-PROJECT.supabase.co';
+  cron_secret text := 'REPLACE-WITH-THE-SAME-CRON_SECRET-AS-THE-FUNCTION';
+  existing uuid;
+begin
+  if project_url like '%REPLACE%' or cron_secret like '%REPLACE%' then
+    raise exception 'Fill in project_url and cron_secret at the top of supabase/schedule.sql first.';
+  end if;
+  select id into existing from vault.secrets where name = 'family_project_url';
+  if existing is null then perform vault.create_secret(project_url, 'family_project_url');
+  else perform vault.update_secret(existing, project_url); end if;
+  select id into existing from vault.secrets where name = 'family_cron_secret';
+  if existing is null then perform vault.create_secret(cron_secret, 'family_cron_secret');
+  else perform vault.update_secret(existing, cron_secret); end if;
+end $$;
 
 -- 2. Poll followed podcasts and YouTube channels every 15 minutes. (Each source is only fetched
 --    every 30 minutes, less often after failures; the job just asks what's due.)
@@ -35,4 +48,6 @@ select cron.schedule('family-tidy-notifications', '23 3 * * 0', $$
 $$);
 
 -- Check: select jobname, schedule, active from cron.job where jobname like 'family-%';
--- Recent runs: select * from cron.job_run_details order by start_time desc limit 20;
+-- After 15 minutes, check the feed job really reached the function (a wrong secret shows as 403):
+--   select status, return_message, start_time from cron.job_run_details order by start_time desc limit 10;
+--   select status_code, content from net._http_response order by created desc limit 5;

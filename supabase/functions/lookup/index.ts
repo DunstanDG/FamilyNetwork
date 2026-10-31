@@ -10,8 +10,9 @@
 // Secrets: PODCAST_INDEX_KEY, PODCAST_INDEX_SECRET (free from https://api.podcastindex.org)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { XMLParser } from 'npm:fast-xml-parser@4.5.0';
-import { isAudioUrl, isPublicHttpUrl, youtubeChannelRef, youtubeFeedUrl, youtubeVideoId, safeImage } from '../_shared/links.js';
+import { isAudioUrl, youtubeChannelRef, youtubeFeedUrl, youtubeVideoId, safeImage } from '../_shared/links.js';
 import { XML_OPTIONS, parseFeed } from '../poll-feeds/logic.ts';
+import { readCapped, safeFetch } from '../_shared/safeFetch.js';
 import { extractChannelId, mapPodcastSearch, parseOpenGraph, podcastIndexHeaders } from './logic.ts';
 
 const cors = {
@@ -26,34 +27,12 @@ const UA = 'Mozilla/5.0 (compatible; FamilyNetwork/1.0; +private family app)';
 const MAX_BYTES = 1024 * 1024;
 
 async function fetchText(url: string, accept = 'text/html,application/xhtml+xml'): Promise<{ text: string; type: string; finalUrl: string }> {
-  if (!isPublicHttpUrl(url)) throw new Error('That address can’t be looked up.');
-  let current = url;
-  // Follow redirects by hand so each hop is checked too.
-  for (let hop = 0; hop < 5; hop += 1) {
-    const res = await fetch(current, { headers: { 'user-agent': UA, accept, 'accept-language': 'en-GB,en;q=0.8' }, redirect: 'manual', signal: AbortSignal.timeout(8000) });
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      current = new URL(res.headers.get('location')!, current).toString();
-      if (!isPublicHttpUrl(current)) throw new Error('That address can’t be looked up.');
-      continue;
-    }
-    if (!res.ok) throw new Error(`The site answered ${res.status}.`);
-    const type = res.headers.get('content-type') || '';
-    if (/^(audio|video|image)\//i.test(type)) { res.body?.cancel(); return { text: '', type, finalUrl: current }; }
-    const reader = res.body!.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (size < MAX_BYTES) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value); size += value.length;
-    }
-    reader.cancel().catch(() => {});
-    const all = new Uint8Array(size);
-    let at = 0;
-    for (const c of chunks) { all.set(c, at); at += c.length; }
-    return { text: new TextDecoder().decode(all), type, finalUrl: current };
-  }
-  throw new Error('Too many redirects.');
+  // Checks the address, every redirect hop, and what the name resolves to.
+  const res = await safeFetch(url, { headers: { 'user-agent': UA, accept, 'accept-language': 'en-GB,en;q=0.8' }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) { res.body?.cancel(); throw new Error(`The site answered ${res.status}.`); }
+  const type = res.headers.get('content-type') || '';
+  if (/^(audio|video|image)\//i.test(type)) { res.body?.cancel(); return { text: '', type, finalUrl: res.finalUrl }; }
+  return { text: await readCapped(res, MAX_BYTES), type, finalUrl: res.finalUrl };
 }
 
 async function preview(url: string) {

@@ -196,7 +196,8 @@ function Voting({ post, ev, options }) {
     <div className="event">
       <p className="event-title">{ev.title}</p>
       <p className="when">
-        {open ? `Voting closes ${when(ev.deadline)}` : 'Voting has closed; deciding…'} · {who.length} of {adults} adults have voted
+        {open ? `Voting closes ${when(ev.deadline)}` : who.length ? 'Voting has closed; deciding…' : 'Voting has closed and nobody voted. The organiser will pick a date or cancel.'}
+        {' · '}{who.length} of {adults} adults have voted
       </p>
       {who.length > 0 && <div className="voted-by">{who.map((id) => <PersonAvatar key={id} person={byId.get(id)} size={28} />)}</div>}
 

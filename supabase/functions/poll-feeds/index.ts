@@ -6,31 +6,13 @@
 // Secrets: CRON_SECRET (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { XMLParser } from 'npm:fast-xml-parser@4.5.0';
-import { isPublicHttpUrl } from '../_shared/links.js';
+import { readCapped, safeFetch } from '../_shared/safeFetch.js';
 import { safeEqual } from '../send-push/logic.ts';
 import { XML_OPTIONS, isDue, isQuietFailure, parseFeed, pickNew, toPayload } from './logic.ts';
 
 const secret = Deno.env.get('CRON_SECRET') ?? '';
 const MAX_BYTES = 5 * 1024 * 1024;
 const parser = new XMLParser(XML_OPTIONS);
-
-async function readCapped(res: Response): Promise<string> {
-  const reader = res.body?.getReader();
-  if (!reader) return '';
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > MAX_BYTES) { reader.cancel(); throw new Error('feed is too large'); }
-    chunks.push(value);
-  }
-  const all = new Uint8Array(size);
-  let at = 0;
-  for (const c of chunks) { all.set(c, at); at += c.length; }
-  return new TextDecoder().decode(all);
-}
 
 Deno.serve(async (req) => {
   if (!secret || !safeEqual(req.headers.get('x-cron-secret') ?? '', secret)) {
@@ -49,11 +31,11 @@ Deno.serve(async (req) => {
   for (const s of (sources ?? []).filter((x) => isDue(x))) {
     const now = new Date().toISOString();
     try {
-      if (!isPublicHttpUrl(s.feed_url)) throw new Error('feed address is not allowed');
       const headers: Record<string, string> = { 'user-agent': 'FamilyNetwork/1.0 (+private family app)', accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml' };
       if (s.etag) headers['if-none-match'] = s.etag;
       if (s.last_modified) headers['if-modified-since'] = s.last_modified;
-      const res = await fetch(s.feed_url, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+      // Every redirect hop is checked, so a public feed can't bounce the poller to a private address.
+      const res = await safeFetch(s.feed_url, { headers, signal: AbortSignal.timeout(15000) });
 
       if (res.status === 304) {
         await db.from('sources').update({ last_polled_at: now, failures: 0, last_error: null }).eq('id', s.id);
@@ -69,7 +51,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const feed = parseFeed(parser.parse(await readCapped(res)));
+      const feed = parseFeed(parser.parse(await readCapped(res, MAX_BYTES, true)));
       const { data: seenRows } = await db.from('feed_items').select('guid').eq('source_id', s.id);
       const seen = new Set((seenRows ?? []).map((r) => r.guid));
       const { post, skip } = pickNew(feed.items, seen, !s.last_polled_at && seen.size === 0);

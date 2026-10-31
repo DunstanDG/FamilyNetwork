@@ -31,6 +31,11 @@ export async function makeDb({ upTo = Infinity } = {}) {
   return db;
 }
 
+// Run one migration file by name (for tests that need to do something between migrations).
+export async function applyMigration(db, name) {
+  await db.exec(readFileSync(new URL(name, MIGRATIONS), 'utf8'));
+}
+
 export async function seedPeople(db) {
   await db.exec(`
     insert into auth.users (id, email, raw_user_meta_data) values

@@ -42,8 +42,10 @@ export function createGateway(config) {
     supabaseUrl, anonKey, serviceKey, immichUrl, immichKey,
     allowedOrigins = [], maxBytes = 40 * 1024 * 1024, fetch: f = globalThis.fetch, log = console,
   } = config;
-  const sessions = ttlCache(60_000);
-  const members = ttlCache(60_000);
+  if (allowedOrigins.includes('*')) throw new Error('ALLOWED_ORIGINS must list the app’s exact address, never *');
+  // Short, so someone removed from the family loses access within 15 seconds.
+  const sessions = ttlCache(15_000);
+  const members = ttlCache(15_000);
 
   const rest = (path, init = {}) => f(`${supabaseUrl}/rest/v1/${path}`, {
     ...init,
@@ -93,7 +95,7 @@ export function createGateway(config) {
 
   function cors(req, res) {
     const origin = req.headers.origin;
-    if (origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'))) {
+    if (origin && allowedOrigins.includes(origin)) {
       res.setHeader('access-control-allow-origin', origin);
       res.setHeader('vary', 'Origin');
       res.setHeader('access-control-allow-headers', 'authorization, content-type, x-width, x-height, x-taken-at, x-position, x-filename');

@@ -15,7 +15,7 @@ confirmed plans to HomeQuest for those who want it.
 
 | Area | Where | Notes |
 | --- | --- | --- |
-| Database, security rules | `supabase/migrations/0001…0004` | Own `family` schema, row-level security on every table. Run in order |
+| Database, security rules | `supabase/migrations/0001…0005` | Own `family` schema, row-level security on every table. Run in order |
 | First admin | `supabase/bootstrap_admin.sql` | Edit placeholders, run once |
 | Scheduled jobs | `supabase/schedule.sql` | Feed polling, closing votes, reminders (pg_cron) |
 | HomeQuest connection | `supabase/homequest_adapter.sql` | Template; edit for HomeQuest's tables when its schema is settled |
@@ -47,9 +47,23 @@ household), a relative who signs in could read that table through HomeQuest's AP
 
 ### 2. Database
 
-1. SQL editor: paste and run each file in `supabase/migrations/` in order (0001, 0002, 0003, 0004).
+1. SQL editor: paste and run each file in `supabase/migrations/` in order (0001 to 0005). 0005 locks
+   down who can call which database function; always run it last.
 2. **Project Settings → API → Exposed schemas**: add `family`.
-3. Sign in to the app once (it will say you need an invite), then edit and run `supabase/bootstrap_admin.sql`
+3. Check the function permissions really are locked down (Supabase can grant functions to signed-in
+   users by default, which the tests here can't see):
+
+   ```sql
+   select routine_name, grantee from information_schema.routine_privileges
+   where routine_schema = 'family' and grantee in ('anon', 'authenticated', 'PUBLIC') order by 1, 2;
+   ```
+
+   Only these should be listed: `peek_invite` (anon and authenticated), and for authenticated
+   `admin_remove_member`, `admin_update_member`, `cancel_event`, `cast_votes`, `confirm_event`,
+   `household_busy`, `import_family_feed`, `is_admin`, `is_member`, `my_role`, `propose_event`,
+   `publish_album`, `redeem_invite`, `register_push`, `rsvp`. Anything else (for example
+   `confirm_choice` or `homequest_sync`): run 0005 again.
+4. Sign in to the app once (it will say you need an invite), then edit and run `supabase/bootstrap_admin.sql`
    to make yourself the first admin. Keep your edited copy out of the repo.
 
 ### 3. Sign-in
@@ -83,7 +97,9 @@ supabase functions deploy lookup
 ```
 
 Then **Database → Extensions**: enable `pg_cron` and `pg_net`, and run `supabase/schedule.sql` (fill
-in the two placeholders at the top; they go into Vault, not the file). Without Podcast Index keys,
+in the two values at the top; they go into Vault, not the file, and the script stops if you leave the
+placeholders in). Fifteen minutes later, run the check queries at the bottom of that file: a wrong
+secret shows up there as a 403, not as an error anywhere else. Without Podcast Index keys,
 people can still follow a show by pasting its RSS link.
 
 To bring Family Feed across, follow `supabase/import_family_feed.sql` (export two CSVs, upload, run).
@@ -97,8 +113,12 @@ To bring Family Feed across, follow `supabase/import_family_feed.sql` (export tw
 3. In Cloudflare Zero Trust: **Networks → Tunnels → Create**, copy the token, and add **one** public
    hostname (e.g. `photos.example.com`) pointing at `http://gateway:8080`. Never add one for Immich.
 4. On the box: copy `gateway/` across, `cp .env.example .env`, fill it in, then `docker compose up -d`.
+   `ALLOWED_ORIGINS` must be the app's exact address, e.g. `https://dunstandg.github.io` (the gateway
+   refuses to start with `*`).
    `curl https://photos.example.com/health` should answer `{"ok":true}`.
 5. Add `VITE_PHOTO_GATEWAY_URL=https://photos.example.com` to the GitHub Actions variables (step 8).
+6. Upload a few real photos from an Android phone and an iPhone, download the originals from the
+   viewer, and check `exiftool -gps:all -xmp:all <file>` prints nothing.
 
 What the gateway does: checks the Supabase sign-in and family membership on every request; accepts
 uploads only to your own album or update; strips location (EXIF GPS and XMP) from JPEG, PNG and WebP
@@ -109,17 +129,23 @@ moves photos whose posts were deleted into Immich's bin.
 
 **Backups** (the Phase 3 gate): install `ops/backup/backup-db.sh` and `ops/backup/backup-photos.sh`
 on the box with `/etc/family-backup.env` (see the top of each script), schedule them nightly, then do
-the test restore in `ops/backup/RESTORE.md` and record it there.
+the test restore in `ops/backup/RESTORE.md` and record it there. The photo backup mirrors, so it
+refuses to run if the library disk isn't mounted, is empty, or has shrunk below 90% of last night's
+copy (set `IMMICH_MOUNT` and `BACKUP_MOUNT` so it can check the mounts); run it once with `FORCE=1`
+after a deliberate big clear-out.
 
 ### 7. Calendar and HomeQuest
 
 Nothing to set up for voting itself. To connect HomeQuest:
 
-1. 👪 → *Households*: tick **uses HomeQuest** for the home household.
+1. 👪 → *Households*: tick **uses HomeQuest** for the home household (only one household can be linked).
 2. Until the adapter is connected, events people add to HomeQuest are queued in
    `family.homequest_outbox`. When HomeQuest's schema is settled, edit
-   `supabase/homequest_adapter.sql` (every guess is marked `REPLACE`), run it, then run the
-   re-sync line at its foot. The voting grid's "Busy at home" marks come from the same file.
+   `supabase/homequest_adapter.sql` (every guess is marked `REPLACE`), run it, then use the check
+   and re-sync lines at its foot. The voting grid's "Busy at home" marks come from the same file.
+   The adapter runs as a `family_bridge` role that can only write HomeQuest events and read their
+   times, only for the HomeQuest household you name. If HomeQuest fails, the error is logged in
+   `family.homequest_outbox` and voting, confirming and RSVPs carry on.
 
 ### 8. Deploy the app
 
@@ -129,7 +155,14 @@ In the GitHub repo: **Settings → Pages → Source: GitHub Actions**, then
 `VITE_PHOTO_GATEWAY_URL`. All are safe to expose; they end up in the built app. Pushing to `main`
 builds, runs the tests and publishes.
 
-### 9. Invite the family
+### 9. Before inviting relatives: give the app its own address
+
+On `github.io` the app shares an origin with HomeQuest, so HomeQuest's page code (or anything that
+ever gets into it) could read this app's stored sign-in. Point a custom domain at GitHub Pages
+(e.g. `family.example.com`: **Settings → Pages → Custom domain**), add an Actions variable `BASE_PATH` set to `/`, and update the Supabase redirect URL and the gateway's `ALLOWED_ORIGINS` to
+match. Do this before the family signs in, so nobody has to sign in again.
+
+### 10. Invite the family
 
 Open the app → 👪 → *Invite someone*. Each link works once and expires after 7 days. People open it,
 sign in with Google (or an emailed code), choose a name, and are walked through installing the app and
@@ -176,8 +209,10 @@ npm run test:e2e               # browser smoke test with a mocked backend
 - **Calendar.** 2–6 dates and 1–4 places; Yes = 2, If needed = 1, No = 0; places scored by rank.
   Voting closes at the deadline or as soon as every adult has voted (children can vote but nobody
   waits for them), and the leader is confirmed; ties go the organiser's way, then the earliest date.
-  The organiser can decide early, change the date later, or cancel; everyone is told. Reminders go
-  out from 9am the day before to everyone who hasn't said they can't come. Everyone can add a
+  The organiser can decide early, change the date later, or cancel; everyone is told. If nobody votes
+  at all, the event is not confirmed: the organiser is told once and picks a date or cancels.
+  Reminders go out from 9am the day before to everyone who hasn't said they can't come (not if the
+  event was only confirmed after that point; the confirmation already said so). Everyone can add a
   confirmed event to their own calendar (.ics).
 
 ## Differences from the product spec
@@ -208,6 +243,11 @@ npm run test:e2e               # browser smoke test with a mocked backend
   also isolate them completely (set `BASE_PATH=/`).
 - The `anon` key is public by design; row-level security is what keeps data private. The service-role
   key lives only in Supabase's own functions and the gateway's `.env` on the box.
+- Someone removed from the family loses photo access within 15 seconds (the gateway's sign-in cache),
+  but photos their browser already downloaded stay on their device.
+- The feed poller and link previews check every address, every redirect hop and, where the runtime
+  supports it, what the name resolves to, so a link can't make them reach a private network.
+- "Download my photos" builds each file in memory as it goes; fine for a family-sized library.
 
 ## Not yet checked against the live services
 
