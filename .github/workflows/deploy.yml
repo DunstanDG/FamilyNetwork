@@ -32,6 +32,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+          VITE_PHOTO_GATEWAY_URL: ${{ vars.VITE_PHOTO_GATEWAY_URL }}
       # A single-page app on Pages: unknown paths should fall back to the app.
       - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3

@@ -12,6 +12,8 @@ const WHAT = {
   vote: 'asked for your vote',
   event: 'updated an event',
 };
+// Notifications with nobody behind them: the calendar deciding by itself, or a reminder.
+const SYSTEM = { event: '📅 Family plans', vote: '📅 Family plans', album: '📷 New photos' };
 
 export function NotificationsSheet({ onClose, onOpenPost, onRead }) {
   const [items, setItems] = useState(null);
@@ -32,14 +34,14 @@ export function NotificationsSheet({ onClose, onOpenPost, onRead }) {
   return (
     <Sheet title="Notifications" onClose={onClose}>
       {items === null && <p className="notice">Loading…</p>}
-      {items?.length === 0 && <p className="notice">Nothing yet. You’ll see mentions and replies here.</p>}
+      {items?.length === 0 && <p className="notice">Nothing yet. You’ll see mentions, replies, new photos and plans here.</p>}
       <ul className="plain">
         {items?.map((n) => (
           <li key={n.id}>
             <button className={`alert-row ${n.read_at ? '' : 'unread'}`} onClick={() => onOpenPost(n.post_id)}>
-              <PersonAvatar person={n.actor} size={40} />
+              <PersonAvatar person={n.actor || { id: 'system', display_name: '📅' }} size={40} />
               <span className="grow">
-                <strong>{n.actor?.display_name || 'Someone'}</strong> {WHAT[n.kind] || 'did something'}
+                {n.actor ? <><strong>{n.actor.display_name}</strong> {WHAT[n.kind] || 'did something'}</> : <strong>{SYSTEM[n.kind] || 'Family Network'}</strong>}
                 {n.snippet && <small>“{n.snippet}”</small>}
                 <small>{ago(n.created_at)}</small>
               </span>

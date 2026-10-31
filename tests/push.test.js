@@ -14,6 +14,11 @@ describe('push decisions', () => {
     expect(p.tag).toBeUndefined();
     expect(buildPayload({ kind: 'reply', module: 'update', post_id: null, snippet: null }, 'A').body).toBe('');
   });
+  it('words calendar messages that come from nobody in particular', () => {
+    expect(buildPayload({ kind: 'event', module: 'event', post_id: 'e1', snippet: 'Tomorrow: Lunch at 13:00, Nan’s' }, null))
+      .toEqual({ title: 'Family plans', body: 'Tomorrow: Lunch at 13:00, Nan’s', postId: 'e1', tag: 'post-e1' });
+    expect(buildPayload({ kind: 'vote', module: 'event', post_id: 'e1', snippet: 'Lunch' }, 'Jan').title).toBe('Jan wants your vote');
+  });
   it('respects per-module muting', () => {
     expect(isMuted(['video', 'link'], 'video')).toBe(true);
     expect(isMuted(['video'], 'update')).toBe(false);

@@ -25,6 +25,13 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#faf6ef',
         theme_color: '#2f5d50',
+        // Android and ChromeOS list the installed app in their share sheet. Links arrive as query
+        // parameters on the app's own address (see src/shareTarget.js).
+        share_target: {
+          action: base,
+          method: 'GET',
+          params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+        },
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

@@ -32,11 +32,43 @@ const posts = [
   { id: 'p-new2', author_id: JAN.id, kind: 'update', body: 'Anyone fancy Sunday lunch?', payload: {}, mentions: [], pinned: false, created_at: ago(90), edited_at: null, author: who(JAN), reactions: [], comments: ['a', 'b', 'c', 'd', 'e'].map((x, i) => cm(`m${x}`, 'p-new2', i % 2 ? JANE : ZOE, `Reply number ${i + 1}`, 80 - i)) },
   { id: 'p-old', author_id: ZOE.id, kind: 'update', body: 'Old news from last week.', payload: {}, mentions: [], pinned: false, created_at: ago(60 * 24 * 7), edited_at: null, author: who(ZOE), reactions: [], comments: [] },
 ];
+const day = (d, h = 13) => { const t = new Date(); t.setUTCDate(t.getUTCDate() + d); t.setUTCHours(h, 0, 0, 0); return t.toISOString(); };
+const VID = 'dQw4w9WgXcQ';
+const base = (o) => ({ mentions: [], pinned: false, edited_at: null, digest_id: null, reactions: [], comments: [], playback: [], photos: [], event: null, ...o });
+posts.forEach((p, i) => { posts[i] = base(p); });
+posts.push(
+  base({ id: 'p-digest', author_id: null, kind: 'digest', body: '', payload: { day: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }) }, created_at: ago(45), author: null }),
+  base({ id: 'p-ep', author_id: null, kind: 'podcast_episode', body: '', digest_id: 'p-digest', created_at: ago(44), author: null,
+    payload: { title: 'Roses in winter', source_title: 'Garden Hour', audio_url: 'https://cdn.fake.test/ep.mp3', duration_seconds: 1800, auto: true } }),
+  base({ id: 'p-autovid', author_id: null, kind: 'video', body: '', digest_id: 'p-digest', created_at: ago(43), author: null,
+    payload: { title: 'Making a chair', source_title: 'Woodwork Weekly', video_id: VID, auto: true } }),
+  base({ id: 'p-vid', author_id: JAN.id, kind: 'video', body: 'You have to see this', created_at: ago(50), author: who(JAN),
+    payload: { url: `https://youtu.be/${VID}`, video_id: VID, title: 'A classic', source_title: 'Rick' } }),
+  base({ id: 'p-album', author_id: JANE.id, kind: 'photo_album', body: 'What a day', created_at: ago(55), author: who(JANE),
+    payload: { title: 'Beach day' }, photos: [1, 2, 3].map((n) => ({ id: `60000000-0000-4000-8000-00000000000${n}`, width: 800, height: 600, taken_at: null, position: n, uploaded_by: JANE.id })) }),
+  base({ id: 'p-vote', author_id: JANE.id, kind: 'event', body: 'Who is in?', created_at: ago(58), author: who(JANE), payload: { title: 'Sunday lunch' },
+    event: { post_id: 'p-vote', title: 'Sunday lunch', deadline: day(4), status: 'voting', chosen_option_id: null, chosen_place_id: null, confirmed_at: null, rsvps: [],
+      options: [
+        { id: 'o-s1', kind: 'slot', starts_at: day(8), ends_at: null, place_name: null, place_url: null, position: 0, votes: [{ user_id: JAN.id, answer: 'yes' }] },
+        { id: 'o-s2', kind: 'slot', starts_at: day(9), ends_at: null, place_name: null, place_url: null, position: 1, votes: [] },
+        { id: 'o-p1', kind: 'place', starts_at: null, ends_at: null, place_name: "Nan's", place_url: null, position: 0, votes: [] },
+        { id: 'o-p2', kind: 'place', starts_at: null, ends_at: null, place_name: 'The Swan', place_url: 'https://swan.fake.test', position: 1, votes: [] },
+      ] } }),
+  base({ id: 'p-party', author_id: ME.id, kind: 'event', body: '', created_at: ago(60 * 30), author: who(ME), payload: { title: 'Birthday tea' },
+    event: { post_id: 'p-party', title: 'Birthday tea', deadline: ago(60), status: 'confirmed', chosen_option_id: 'q-s1', chosen_place_id: 'q-p1', confirmed_at: ago(60), rsvps: [{ user_id: JAN.id, answer: 'going', add_to_homequest: false }],
+      options: [
+        { id: 'q-s1', kind: 'slot', starts_at: day(3, 15), ends_at: day(3, 17), place_name: null, place_url: null, position: 0, votes: [] },
+        { id: 'q-s2', kind: 'slot', starts_at: day(4, 15), ends_at: null, place_name: null, place_url: null, position: 1, votes: [] },
+        { id: 'q-p1', kind: 'place', starts_at: null, ends_at: null, place_name: 'Our house', place_url: null, position: 0, votes: [] },
+      ] } }),
+);
 const invites = [];
 let netDown = false;
 let profileMissing = false;
 let inviteValid = true;
 const log = [];
+const gatewayAuth = [];
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const failures = [];
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  -> ' + extra : ''}`); if (!ok) failures.push(name); };
 
@@ -67,7 +99,23 @@ async function handle(route) {
     profileMissing = false; profileRow.display_name = b.p_display_name.trim(); profileRow.role = 'adult';
     return json(route, profileRow);
   }
-  if (path === '/rest/v1/households') return json(route, [{ id: 'h1', name: 'Home' }]);
+  if (path === '/rest/v1/households') return json(route, [{ id: 'h1', name: 'Home', homequest_linked: true }]);
+  if (path === '/functions/v1/lookup') {
+    const b = body(); log.push({ m: 'lookup', b });
+    if (b.action === 'preview') return json(route, { title: 'A classic', site: 'Rick', image: `https://i.ytimg.com/vi/${VID}/hqdefault.jpg`, video_id: VID });
+    return json(route, { shows: [] });
+  }
+  if (path === '/rest/v1/sources') return json(route, [{ id: 's1', kind: 'podcast', feed_url: 'https://pod.fake.test/rss', title: 'Garden Hour', image_url: null, added_by: JAN.id, created_at: ago(9000), failures: 0 }]);
+  if (path === '/rest/v1/events') {
+    return json(route, posts.filter((p) => p.event?.status === 'confirmed').map((p) => ({ post_id: p.id, title: p.event.title,
+      chosen: p.event.options.find((o) => o.id === p.event.chosen_option_id), place: p.event.options.find((o) => o.id === p.event.chosen_place_id) })));
+  }
+  if (path.startsWith('/rest/v1/rpc/')) {
+    const b = body(); log.push({ m: `RPC ${path.slice(13)}`, b });
+    if (path.endsWith('/cast_votes')) return json(route, 'voting');
+    if (path.endsWith('/household_busy')) return json(route, [{ starts_at: day(9, 12), ends_at: day(9, 16) }]);
+    return json(route, null);
+  }
   if (path === '/rest/v1/notifications') {
     if (method === 'HEAD') return route.fulfill({ status: 200, headers: { ...cors, 'content-range': '*/2' } });
     return json(route, [{ id: 1, kind: 'mention', module: 'update', post_id: 'p-new1', comment_id: null, snippet: 'hello there', created_at: ago(5), read_at: null, actor: who(JANE) }]);
@@ -76,6 +124,8 @@ async function handle(route) {
   if (path === '/rest/v1/posts' && method === 'GET') {
     let rows = posts.filter((p) => {
       if (q.get('id')) return p.id === q.get('id').replace('eq.', '');
+      if (q.get('digest_id')?.startsWith('in.')) return Boolean(p.digest_id) && q.get('digest_id').includes(p.digest_id);
+      if (q.get('digest_id') === 'is.null' && p.digest_id) return false;
       if (q.get('pinned') === 'eq.true' && !p.pinned) return false;
       if (q.get('pinned') === 'eq.false' && p.pinned) return false;
       if (q.get('kind') && p.kind !== q.get('kind').replace('eq.', '')) return false;
@@ -86,7 +136,7 @@ async function handle(route) {
   }
   if (path === '/rest/v1/posts' && method === 'POST') {
     const b = body(); log.push({ m: 'POST posts', b });
-    posts.push({ ...b, author_id: ME.id, pinned: false, created_at: new Date().toISOString(), edited_at: null, author: who(ME), reactions: [], comments: [] });
+    posts.push(base({ ...b, author_id: ME.id, created_at: new Date().toISOString(), author: who(ME) }));
     return route.fulfill({ status: 201, headers: cors });
   }
   if (path === '/rest/v1/comments' && method === 'POST') {
@@ -117,7 +167,7 @@ async function handle(route) {
 }
 
 (async () => {
-  const env = { ...process.env, VITE_SUPABASE_URL: HOST, VITE_SUPABASE_ANON_KEY: 'anon-key', VITE_VAPID_PUBLIC_KEY: 'BPlaceholderKey' };
+  const env = { ...process.env, VITE_SUPABASE_URL: HOST, VITE_SUPABASE_ANON_KEY: 'anon-key', VITE_VAPID_PUBLIC_KEY: 'BPlaceholderKey', VITE_PHOTO_GATEWAY_URL: 'https://photos.fake.test' };
   const build = spawnSync('npx', ['vite', 'build', '--outDir', 'dist-e2e'], { env, encoding: 'utf8', cwd: path.join(__dirname, '..', '..') });
   if (build.status !== 0) { console.error(build.stdout, build.stderr); process.exit(2); }
   const server = spawn('npx', ['vite', 'preview', '--outDir', 'dist-e2e', '--port', String(PORT), '--strictPort'], { cwd: path.join(__dirname, '..', '..'), stdio: 'ignore', env });
@@ -130,6 +180,13 @@ async function handle(route) {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, serviceWorkers: 'block' });
   await context.route(`${HOST}/**`, handle);
+  await context.route('https://photos.fake.test/**', (route) => {
+    gatewayAuth.push(route.request().headers().authorization || '');
+    route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: PNG });
+  });
+  await context.route('https://i.ytimg.com/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await context.route('https://cdn.fake.test/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await context.route('https://www.youtube-nocookie.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>player</p>' }));
   const jwt = `${Buffer.from('{"alg":"HS256","typ":"JWT"}').toString('base64url')}.${Buffer.from(JSON.stringify({ sub: ME.id, exp: 4102444800, role: 'authenticated' })).toString('base64url')}.sig`;
   const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user: { id: ME.id, aud: 'authenticated', email: 'alex@example.com', app_metadata: {}, user_metadata: { full_name: 'Alex Morgan' }, created_at: ago(1) } };
   await context.addInitScript(([s]) => {
@@ -150,9 +207,10 @@ async function handle(route) {
   check('six tabs in the bottom nav', await page.locator('.tabs button').count() === 6);
   check('pinned post comes first', (await page.locator('.post').first().getAttribute('class')).includes('pinned'));
   check('posts are newest first after the pin', (await page.locator('.post').nth(1).innerText()).includes('beach'));
-  check('unread line is shown with the right count', (await page.locator('.unread-line').innerText()).startsWith('2 new'), await page.locator('.unread-line').innerText());
-  const idx = await page.evaluate(() => [...document.querySelectorAll('.post, .unread-line')].map((e) => (e.classList.contains('unread-line') ? 'LINE' : e.id)).join(','));
-  check('unread line sits above the first post already seen', idx === 'p-p-pinned,p-p-new1,p-p-new2,LINE,p-p-old', idx);
+  check('unread line is shown with the right count', (await page.locator('.unread-line').innerText()).startsWith('6 new'), await page.locator('.unread-line').innerText());
+  const idx = await page.evaluate(() => [...document.querySelectorAll('.timeline > .post, .timeline > div > .post, .unread-line')].map((e) => (e.classList.contains('unread-line') ? 'LINE' : e.id)).join(','));
+  check('unread line sits above the first post already seen', idx.startsWith('p-p-pinned,p-p-new1,') && idx.endsWith('p-p-new2,LINE,p-p-party,p-p-old'), idx);
+  check('auto-posted episodes stay inside the daily digest on Home', idx.includes('p-p-digest') && !idx.includes('p-p-ep') && !idx.includes('p-p-autovid'), idx);
   check('link in a post becomes a clickable link', await page.locator('#p-p-new1 .text a[href="https://example.com/trip"]').count() === 1);
   check('link card is shown for an attached link', await page.locator('#p-p-new1 .linkcard').count() === 1);
   check('short thread opens by itself', await page.locator('#p-p-new1 .comment').count() === 3);
@@ -186,7 +244,8 @@ async function handle(route) {
   check('Enter completes the mention', (await box.inputValue()) === 'Lunch sounds great @Jane Smith ', await box.inputValue());
   await box.type('and @Jan!');
   await page.getByRole('button', { name: 'Post', exact: true }).click();
-  await page.waitForFunction(() => document.querySelectorAll('.post').length === 5, null, { timeout: 8000 });
+  const before5 = await page.locator('.post').count();
+  await page.waitForFunction((n) => document.querySelectorAll('.post').length === n + 1, before5, { timeout: 8000 });
   const sent = log.find((l) => l.m === 'POST posts');
   check('post sent as an update with a client id', sent?.b.kind === 'update' && /^[0-9a-f-]{36}$/.test(sent.b.id));
   check('mentions were worked out from the text', JSON.stringify(sent.b.mentions.sort()) === JSON.stringify([JAN.id, JANE.id].sort()), JSON.stringify(sent.b.mentions));
@@ -242,9 +301,92 @@ async function handle(route) {
   await page.waitForFunction(() => !document.body.innerText.includes('Showing what was saved on this device'), null, { timeout: 8000 });
   check('back online: notice goes away', true);
 
-  // --- tabs
+  // --- phase 2: digest, videos, podcasts, sharing a link
+  check('digest card lists what the shows put out', (await page.locator('#p-p-digest').innerText()).includes('New from your shows')
+    && await page.locator('#p-p-digest .digest-item').count() === 2);
+  await page.locator('#p-p-vid .video-poster').click();
+  check('a shared video plays in place (privacy-friendly embed)', (await page.locator('#p-p-vid iframe').getAttribute('src')).startsWith(`https://www.youtube-nocookie.com/embed/${VID}`));
+  await page.locator('#p-p-digest .digest-item .play').first().click();
+  await page.waitForSelector('.mini-player');
+  check('tapping play on an episode opens the mini player', (await page.locator('.mini-player').innerText()).includes('Roses in winter'));
+  check('the player is loading the episode', (await page.evaluate(() => document.querySelector('audio').src)) === 'https://cdn.fake.test/ep.mp3');
+  await page.screenshot({ path: `${SHOTS}/2b-feeds.png` });
+  await page.locator('.mini-player button[aria-label="Stop and close player"]').click();
+  await page.waitForFunction(() => !document.querySelector('.mini-player'), null, { timeout: 5000 }).catch(() => {});
+  check('the player can be closed', await page.locator('.mini-player').count() === 0);
+
+  await page.locator('.tabs button', { hasText: 'Videos' }).click();
+  await page.waitForSelector('.composer input[type=url]');
+  check('Videos tab lists every video, including auto-posted ones', await page.locator('#p-p-autovid').count() === 1 && await page.locator('#p-p-vid').count() === 1);
+  await page.locator('.composer input[type=url]').fill(`https://www.youtube.com/watch?v=${VID}`);
+  await page.waitForSelector('.composer .linkcard-title', { timeout: 8000 });
+  check('pasting a link fetches a preview', (await page.locator('.composer-preview').innerText()).includes('A classic') && (await page.locator('.composer-preview .badge').innerText()) === 'Video');
+  await page.locator('.composer textarea').fill('Another one');
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.post').length >= 3, null, { timeout: 8000 });
+  const shared = log.filter((l) => l.m === 'POST posts').pop();
+  check('a YouTube link is posted as a video with its id and title', shared?.b.kind === 'video' && shared.b.payload.video_id === VID && shared.b.payload.title === 'A classic', JSON.stringify(shared?.b));
+  await page.getByRole('button', { name: /Channels we follow/ }).click();
+  check('Videos tab offers following a channel', (await page.locator('.sheet h2').innerText()) === 'Channels we follow');
+  await page.keyboard.press('Escape');
+
   await page.locator('.tabs button', { hasText: 'Podcasts' }).click();
-  check('placeholder tab explains what is coming', (await page.locator('.soon').innerText()).includes('on their way'));
+  await page.waitForSelector('#p-p-ep');
+  check('Podcasts tab shows episodes with a play button', await page.locator('#p-p-ep .play').count() === 1);
+  await page.getByRole('button', { name: /Shows we follow/ }).click();
+  await page.waitForSelector('.sheet .source-row');
+  check('followed shows are listed with who added them', (await page.locator('.sheet .source-row').first().innerText()).includes('Garden Hour'));
+  await page.keyboard.press('Escape');
+  check('composer is only a link box away from Home', await page.locator('.composer input[type=url]').count() === 1);
+
+  // --- phase 3: photos
+  await page.locator('.tabs button', { hasText: 'Photos' }).click();
+  await page.waitForSelector('#p-p-album .album-cell img', { timeout: 8000 });
+  check('album shows its photos through the gateway', await page.locator('#p-p-album .album-cell').count() === 3);
+  check('every photo request carries the sign-in', gatewayAuth.length >= 3 && gatewayAuth.every((a) => a.startsWith('Bearer ')));
+  check('Photos tab offers a new album', await page.getByRole('button', { name: /New album/ }).count() === 1);
+  await page.locator('#p-p-album .album-cell').nth(1).click();
+  await page.waitForSelector('.viewer');
+  check('viewer opens on the photo tapped', (await page.locator('.viewer-top').innerText()).startsWith('2 / 3'));
+  await page.keyboard.press('ArrowRight');
+  check('arrow keys move between photos', (await page.locator('.viewer-top').innerText()).startsWith('3 / 3'));
+  await page.locator('.viewer textarea').fill('Gorgeous');
+  await page.locator('.viewer button', { hasText: 'Send' }).click();
+  await page.waitForTimeout(400);
+  const pc = log.filter((l) => l.m === 'POST comments').pop();
+  check('a comment in the viewer is about that one photo', pc?.b.photo_asset_id === '60000000-0000-4000-8000-000000000003', JSON.stringify(pc?.b));
+  await page.screenshot({ path: `${SHOTS}/2c-viewer.png` });
+  await page.keyboard.press('Escape');
+  check('Escape closes the viewer', await page.locator('.viewer').count() === 0);
+
+  // --- phase 4: calendar
+  await page.locator('.tabs button', { hasText: 'Calendar' }).click();
+  await page.waitForSelector('#p-p-vote .vote-row');
+  check('coming-up list shows the confirmed event', (await page.locator('.upcoming').innerText()).includes('Birthday tea'));
+  check('voting grid lists the dates and places', await page.locator('#p-p-vote .vote-row').count() === 4);
+  check('the leading date is marked', (await page.locator('#p-p-vote .vote-row.best').first().innerText()).includes('Leading'));
+  check('household busy times are shown on the grid', await page.locator('#p-p-vote .busy-chip').count() === 1);
+  await page.locator('#p-p-vote .vote-row').nth(1).getByRole('button', { name: /Yes/ }).click();
+  await page.locator('#p-p-vote .vote-row').nth(0).getByRole('button', { name: /If needed/ }).click();
+  await page.locator('#p-p-vote .rank-btn', { hasText: 'The Swan' }).click();
+  await page.locator('#p-p-vote .rank-btn', { hasText: "Nan's" }).click();
+  check('tapping places ranks them in order', (await page.locator('#p-p-vote .rank-btn', { hasText: 'The Swan' }).innerText()).startsWith('1'));
+  await page.locator('#p-p-vote').getByRole('button', { name: 'Save my votes' }).click();
+  await page.waitForTimeout(300);
+  const votes = log.filter((l) => l.m === 'RPC cast_votes').pop()?.b;
+  const byOpt = Object.fromEntries((votes?.p_votes || []).map((v) => [v.option_id, v.answer || v.rank]));
+  check('votes are sent together', votes?.p_event === 'p-vote' && byOpt['o-s1'] === 'if_needed' && byOpt['o-s2'] === 'yes' && byOpt['o-p2'] === 1 && byOpt['o-p1'] === 2, JSON.stringify(votes));
+  await page.screenshot({ path: `${SHOTS}/2d-voting.png`, fullPage: true });
+
+  await page.locator('#p-p-party').getByRole('button', { name: /Going/ }).click();
+  await page.waitForTimeout(300);
+  const r = log.filter((l) => l.m === 'RPC rsvp').pop()?.b;
+  check('RSVP is sent, not added to HomeQuest by default', r?.p_event === 'p-party' && r.p_answer === 'going' && r.p_add_to_homequest === false, JSON.stringify(r));
+  check('a child in the household can be answered for', await page.locator('#p-p-party .kid-row', { hasText: 'Zoë' }).count() === 1);
+  check('confirmed events offer an .ics invite', await page.locator('#p-p-party').getByRole('button', { name: /Add to my calendar/ }).count() === 1);
+  await page.getByRole('button', { name: /Plan something/ }).click();
+  check('Calendar tab offers planning something', (await page.locator('.sheet h2').innerText()) === 'Plan something');
+  await page.keyboard.press('Escape');
   check('composer only on Home', await page.locator('.composer').count() === 0);
   await page.locator('.tabs button', { hasText: 'Home' }).click();
 
@@ -338,6 +480,19 @@ async function handle(route) {
   await p3.waitForSelector('.msg.error');
   check('uninvited people are told it is private and cannot see anything', (await p3.locator('.msg.error').innerText()).includes('invite') && await p3.locator('.post').count() === 0 && await p3.locator('#name').count() === 0);
   await stranger.close();
+
+  // ================= sharing from another app =================
+  const sharer = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await sharer.route(`${HOST}/**`, handle);
+  profileMissing = false;
+  await sharer.addInitScript(([s]) => { localStorage.setItem('family-network-auth', JSON.stringify(s)); localStorage.setItem('fn-onboarded-v1', '1'); }, [session]);
+  const p4 = await sharer.newPage();
+  await p4.goto(`${APP}?share_title=Video&share_text=${encodeURIComponent(`Look at this https://youtu.be/${VID}`)}`);
+  await p4.waitForSelector('.sheet .composer');
+  check('a link shared from another app opens ready to post', (await p4.locator('.sheet .composer input[type=url]').inputValue()) === `https://youtu.be/${VID}`
+    && (await p4.locator('.sheet .composer textarea').inputValue()) === 'Look at this');
+  check('and the address bar is tidied', !p4.url().includes('share_'));
+  await sharer.close();
 
   check('no page errors or unexpected console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await browser.close();

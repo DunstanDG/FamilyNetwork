@@ -1,0 +1,33 @@
+# The photo gateway and the Cloudflare Tunnel that exposes it (and only it) to the internet.
+# Run on the Proxmox box next to Immich:   docker compose up -d
+#
+# In the Cloudflare dashboard, give the tunnel ONE public hostname, e.g. photos.example.com,
+# pointing at http://gateway:8080. Do not add a hostname for Immich itself.
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # Not published on the host: only cloudflared can reach it.
+    expose: ["8080"]
+    networks: [immich, edge]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+
+  cloudflared:
+    # Pin to a specific release once it is running (see hub.docker.com/r/cloudflare/cloudflared/tags).
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks: [edge]
+    depends_on: [gateway]
+
+networks:
+  edge: {}
+  # Immich's own compose network, so the gateway can reach immich-server by name.
+  # Check its name with `docker network ls` (usually immich_default).
+  immich:
+    external: true
+    name: immich_default

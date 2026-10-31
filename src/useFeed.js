@@ -59,7 +59,7 @@ export function useFeed(kind) {
   // Live updates from other people.
   useEffect(() => {
     const channel = supabase.channel(`feed-${cacheKey}-${Math.random().toString(36).slice(2)}`);
-    ['posts', 'comments', 'reactions'].forEach((table) =>
+    ['posts', 'comments', 'reactions', 'photo_assets', 'events', 'event_votes', 'event_rsvps'].forEach((table) =>
       channel.on('postgres_changes', { event: '*', schema: 'family', table }, reloadSoon));
     channel.subscribe();
     return () => { clearTimeout(timer.current); supabase.removeChannel(channel); };

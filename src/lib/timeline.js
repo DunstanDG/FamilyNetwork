@@ -8,11 +8,11 @@ export const REACTIONS = [
 // The tabs, and the post kind each one shows. Home shows everything.
 export const MODULES = [
   { id: 'home', label: 'Home', icon: '🏠', kind: null },
-  { id: 'photos', label: 'Photos', icon: '📷', kind: 'photo_album', phase: 3, when: 'mid-March' },
-  { id: 'podcasts', label: 'Podcasts', icon: '🎧', kind: 'podcast_episode', phase: 2, when: 'January' },
-  { id: 'videos', label: 'Videos', icon: '▶️', kind: 'video', phase: 2, when: 'January' },
-  { id: 'news', label: 'News', icon: '📰', kind: 'link', phase: 2, when: 'January' },
-  { id: 'calendar', label: 'Calendar', icon: '📅', kind: 'event', phase: 4, when: 'April' },
+  { id: 'photos', label: 'Photos', icon: '📷', kind: 'photo_album' },
+  { id: 'podcasts', label: 'Podcasts', icon: '🎧', kind: 'podcast_episode' },
+  { id: 'videos', label: 'Videos', icon: '▶️', kind: 'video' },
+  { id: 'news', label: 'News', icon: '📰', kind: 'link' },
+  { id: 'calendar', label: 'Calendar', icon: '📅', kind: 'event' },
 ];
 
 export const KIND_LABEL = {
@@ -22,6 +22,7 @@ export const KIND_LABEL = {
   video: 'Videos',
   link: 'News',
   event: 'Calendar',
+  digest: 'From your shows',
 };
 
 export function summariseReactions(rows = [], myId) {

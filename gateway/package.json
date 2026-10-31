@@ -1,0 +1,9 @@
+{
+  "name": "family-network-photo-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Checks family sign-ins and serves photos from Immich. No dependencies beyond Node itself.",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node src/main.js" }
+}
