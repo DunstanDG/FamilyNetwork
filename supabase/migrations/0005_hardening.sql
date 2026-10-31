@@ -13,12 +13,12 @@
 -- HomeQuest link
 -- ---------------------------------------------------------------------------------------------
 
-alter table family.households add column homequest_household_id text
+alter table family.households add column if not exists homequest_household_id text
   check (homequest_household_id is null or char_length(homequest_household_id) <= 100);
 -- The spec links one household (the home one) to HomeQuest. Enforce it, so nothing has to guess which.
-create unique index households_one_homequest_link on family.households ((true)) where homequest_linked;
+create unique index if not exists households_one_homequest_link on family.households ((true)) where homequest_linked;
 
-alter table family.homequest_outbox add column error text;
+alter table family.homequest_outbox add column if not exists error text;
 
 create or replace function family.homequest_sync(p_event uuid) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -81,7 +81,7 @@ end $$;
 -- Calendar fixes
 -- ---------------------------------------------------------------------------------------------
 
-alter table family.events add column nudged_at timestamptz;   -- organiser told nobody voted
+alter table family.events add column if not exists nudged_at timestamptz;   -- organiser told nobody voted
 
 create or replace function family.best_options(p_event uuid) returns table (slot_id uuid, place_id uuid)
 language sql stable security definer set search_path = '' as $$

@@ -12,16 +12,16 @@
 -- ---------------------------------------------------------------------------------------------
 
 alter table family.posts alter column author_id drop not null;     -- null = posted by the feed poller
-alter table family.posts drop constraint posts_kind_check;
+alter table family.posts drop constraint if exists posts_kind_check;
 alter table family.posts add constraint posts_kind_check
   check (kind in ('update', 'photo_album', 'podcast_episode', 'video', 'link', 'event', 'digest'));
-alter table family.posts add column digest_id uuid references family.posts (id) on delete cascade;
-create index posts_digest_idx on family.posts (digest_id) where digest_id is not null;
-create index posts_home_idx on family.posts (created_at desc) where digest_id is null;
+alter table family.posts add column if not exists digest_id uuid references family.posts (id) on delete cascade;
+create index if not exists posts_digest_idx on family.posts (digest_id) where digest_id is not null;
+create index if not exists posts_home_idx on family.posts (created_at desc) where digest_id is null;
 -- One digest a day (the day is the family's local date, Europe/London).
-create unique index posts_one_digest_per_day on family.posts ((payload ->> 'day')) where kind = 'digest';
+create unique index if not exists posts_one_digest_per_day on family.posts ((payload ->> 'day')) where kind = 'digest';
 
-drop policy posts_insert on family.posts;
+drop policy if exists posts_insert on family.posts;
 create policy posts_insert on family.posts for insert to authenticated
   with check (
     family.is_member() and author_id = auth.uid() and not pinned
@@ -88,7 +88,7 @@ end $$;
 -- Followed shows and channels (shared by the whole family)
 -- ---------------------------------------------------------------------------------------------
 
-create table family.sources (
+create table if not exists family.sources (
   id             uuid primary key default gen_random_uuid(),
   kind           text not null check (kind in ('podcast', 'youtube')),
   feed_url       text not null unique check (feed_url ~ '^https?://' and char_length(feed_url) <= 2000),
@@ -108,7 +108,7 @@ create table family.sources (
 
 -- Items the poller has seen. guid dedupes episodes and videos before they become posts; post_id is
 -- null for back-catalogue items recorded on first follow but never posted.
-create table family.feed_items (
+create table if not exists family.feed_items (
   id         bigint generated always as identity primary key,
   source_id  uuid not null references family.sources (id) on delete cascade,
   guid       text not null,
@@ -118,7 +118,7 @@ create table family.feed_items (
 );
 
 -- Podcast resume positions, one row per person per episode.
-create table family.playback (
+create table if not exists family.playback (
   user_id          uuid not null default auth.uid() references family.profiles (id) on delete cascade,
   post_id          uuid not null references family.posts (id) on delete cascade,
   position_seconds numeric not null default 0 check (position_seconds >= 0),
@@ -132,19 +132,27 @@ alter table family.sources    enable row level security;
 alter table family.feed_items enable row level security;
 alter table family.playback   enable row level security;
 
+drop policy if exists sources_select on family.sources;
 create policy sources_select on family.sources for select to authenticated using (family.is_member());
+drop policy if exists sources_insert on family.sources;
 create policy sources_insert on family.sources for insert to authenticated
   with check (family.is_member() and added_by = auth.uid());
+drop policy if exists sources_delete on family.sources;
 create policy sources_delete on family.sources for delete to authenticated
   using (added_by = auth.uid() or family.is_admin());
 
+drop policy if exists feed_items_select on family.feed_items;
 create policy feed_items_select on family.feed_items for select to authenticated using (family.is_member());
 
+drop policy if exists playback_select on family.playback;
 create policy playback_select on family.playback for select to authenticated using (user_id = auth.uid());
+drop policy if exists playback_insert on family.playback;
 create policy playback_insert on family.playback for insert to authenticated
   with check (user_id = auth.uid() and family.is_member());
+drop policy if exists playback_update on family.playback;
 create policy playback_update on family.playback for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists playback_delete on family.playback;
 create policy playback_delete on family.playback for delete to authenticated using (user_id = auth.uid());
 
 grant select, delete on family.sources to authenticated;
@@ -160,7 +168,7 @@ grant all on family.sources, family.feed_items, family.playback to service_role;
 -- Used by the feed poller (service role): file a new item under today's digest
 -- ---------------------------------------------------------------------------------------------
 
-create function family.add_feed_item(
+create or replace function family.add_feed_item(
   p_source uuid, p_guid text, p_kind text, p_payload jsonb, p_post boolean, p_published timestamptz default null
 ) returns uuid
 language plpgsql security definer set search_path = '' as $$
@@ -201,13 +209,13 @@ grant execute on function family.add_feed_item(uuid, text, text, jsonb, boolean,
 -- ---------------------------------------------------------------------------------------------
 
 -- Staging tables you fill from a Family Feed export (CSV upload in the Table editor works).
-create table family.ff_follows (
+create table if not exists family.ff_follows (
   kind     text not null check (kind in ('podcast', 'youtube')),
   feed_url text not null,
   title    text,
   email    text            -- who followed it in Family Feed (optional)
 );
-create table family.ff_likes (
+create table if not exists family.ff_likes (
   email        text not null,            -- the person's sign-in email
   kind         text not null check (kind in ('podcast', 'youtube', 'link')),
   item_url     text not null,            -- the episode, video or article
@@ -222,7 +230,7 @@ alter table family.ff_likes   enable row level security;
 
 -- Follows become sources; likes become heart reactions on a post for the item (created if needed,
 -- with no author and no digest, dated when it was published). Dislikes are dropped. Safe to re-run.
-create function family.import_family_feed() returns table (sources_added int, posts_added int, hearts_added int)
+create or replace function family.import_family_feed() returns table (sources_added int, posts_added int, hearts_added int)
 language plpgsql security definer set search_path = '' as $$
 declare
   s int; p int; h int;
@@ -272,8 +280,13 @@ revoke all on function family.import_family_feed() from public;
 grant execute on function family.import_family_feed() to authenticated;   -- checks for an admin itself
 
 do $$
+declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table family.sources;
+    foreach t in array array['sources'] loop
+      if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'family' and tablename = t) then
+        execute format('alter publication supabase_realtime add table family.%I', t);
+      end if;
+    end loop;
   end if;
 end $$;

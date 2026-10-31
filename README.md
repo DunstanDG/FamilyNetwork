@@ -49,6 +49,9 @@ household), a relative who signs in could read that table through HomeQuest's AP
 
 1. SQL editor: paste and run each file in `supabase/migrations/` in order (0001 to 0005). 0005 locks
    down who can call which database function; always run it last.
+   0002 to 0005 are safe to run again. If one stops part-way (for example with "relation … already
+   exists"), run that file again, then every file after it, in order: a later file sometimes updates
+   something an earlier one created, so re-running only an earlier one would undo that.
 2. **Project Settings → API → Exposed schemas**: add `family`.
 3. Check the function permissions really are locked down (Supabase can grant functions to signed-in
    users by default, which the tests here can't see):

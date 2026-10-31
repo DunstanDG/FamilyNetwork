@@ -10,7 +10,7 @@
 -- functions at the bottom of this file; see supabase/homequest_adapter.sql to point them at
 -- HomeQuest's own tables.
 
-create table family.events (
+create table if not exists family.events (
   post_id            uuid primary key references family.posts (id) on delete cascade,
   title              text not null check (char_length(title) between 1 and 120),
   deadline           timestamptz not null,
@@ -23,7 +23,7 @@ create table family.events (
   created_at         timestamptz not null default now()
 );
 
-create table family.event_options (
+create table if not exists family.event_options (
   id         uuid primary key default gen_random_uuid(),
   event_id   uuid not null references family.events (post_id) on delete cascade,
   kind       text not null check (kind in ('slot', 'place')),
@@ -36,13 +36,20 @@ create table family.event_options (
       or (kind = 'place' and place_name is not null and starts_at is null and ends_at is null)),
   check (ends_at is null or ends_at > starts_at)
 );
-create index event_options_event_idx on family.event_options (event_id, kind, position);
+create index if not exists event_options_event_idx on family.event_options (event_id, kind, position);
 
-alter table family.events
-  add constraint events_chosen_option_fkey foreign key (chosen_option_id) references family.event_options (id) on delete set null,
-  add constraint events_chosen_place_fkey foreign key (chosen_place_id) references family.event_options (id) on delete set null;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'events_chosen_option_fkey') then
+    alter table family.events add constraint events_chosen_option_fkey foreign key (chosen_option_id) references family.event_options (id) on delete set null;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'events_chosen_place_fkey') then
+    alter table family.events add constraint events_chosen_place_fkey foreign key (chosen_place_id) references family.event_options (id) on delete set null;
+  end if;
+end $$;
 
-create table family.event_votes (
+create table if not exists family.event_votes (
   option_id  uuid not null references family.event_options (id) on delete cascade,
   user_id    uuid not null default auth.uid() references family.profiles (id) on delete cascade,
   answer     text check (answer in ('yes', 'if_needed', 'no')),   -- for slots
@@ -52,7 +59,7 @@ create table family.event_votes (
   check (num_nonnulls(answer, rank) = 1)
 );
 
-create table family.event_rsvps (
+create table if not exists family.event_rsvps (
   event_id         uuid not null references family.events (post_id) on delete cascade,
   user_id          uuid not null references family.profiles (id) on delete cascade,
   answer           text not null check (answer in ('going', 'maybe', 'not_going')),
@@ -64,7 +71,7 @@ create table family.event_rsvps (
 
 -- What has been asked of HomeQuest. The default adapter only records here; a direct adapter writes
 -- straight into HomeQuest and records here too, as a log.
-create table family.homequest_outbox (
+create table if not exists family.homequest_outbox (
   id                 bigint generated always as identity primary key,
   action             text not null check (action in ('upsert', 'delete')),
   event_id           uuid,
@@ -81,7 +88,7 @@ create table family.homequest_outbox (
 
 -- Create or update the household's copy of an event; returns HomeQuest's id for it.
 -- p_event: { title, starts_at, ends_at, place, place_url, link, attendees: [{ id, name }] }
-create function family.homequest_upsert_event(p_existing text, p_event jsonb) returns text
+create or replace function family.homequest_upsert_event(p_existing text, p_event jsonb) returns text
 language plpgsql security definer set search_path = '' as $$
 declare id_ bigint;
 begin
@@ -91,14 +98,14 @@ begin
   return coalesce(p_existing, 'queued-' || (p_event ->> 'event_id'));
 end $$;
 
-create function family.homequest_delete_event(p_id text, p_event uuid) returns void
+create or replace function family.homequest_delete_event(p_id text, p_event uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   insert into family.homequest_outbox (action, event_id, homequest_event_id) values ('delete', p_event, p_id);
 end $$;
 
 -- When is this household busy? Times only, never what they are doing.
-create function family.homequest_busy(p_household uuid, p_from timestamptz, p_to timestamptz)
+create or replace function family.homequest_busy(p_household uuid, p_from timestamptz, p_to timestamptz)
 returns table (starts_at timestamptz, ends_at timestamptz)
 language sql stable security definer set search_path = '' as $$
   select null::timestamptz, null::timestamptz where false;
@@ -108,7 +115,7 @@ $$;
 -- Scoring (mirrored in src/lib/events.js so the grid can update live)
 -- ---------------------------------------------------------------------------------------------
 
-create function family.best_options(p_event uuid) returns table (slot_id uuid, place_id uuid)
+create or replace function family.best_options(p_event uuid) returns table (slot_id uuid, place_id uuid)
 language sql stable security definer set search_path = '' as $$
   with ev as (select e.post_id, p.author_id as organiser from family.events e join family.posts p on p.id = e.post_id where e.post_id = p_event),
   nplaces as (select count(*)::int as n from family.event_options where event_id = p_event and kind = 'place'),
@@ -134,7 +141,7 @@ $$;
 -- Keeping HomeQuest in step
 -- ---------------------------------------------------------------------------------------------
 
-create function family.homequest_sync(p_event uuid) returns void
+create or replace function family.homequest_sync(p_event uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
   ev        family.events;
@@ -172,7 +179,7 @@ end $$;
 -- ---------------------------------------------------------------------------------------------
 
 -- p_slots: [{ starts_at, ends_at? }], p_places: [{ name, url? }]. Returns the new post's id.
-create function family.propose_event(
+create or replace function family.propose_event(
   p_id uuid, p_title text, p_body text, p_deadline timestamptz, p_slots jsonb, p_places jsonb
 ) returns uuid
 language plpgsql security definer set search_path = '' as $$
@@ -210,7 +217,7 @@ begin
   return p_id;
 end $$;
 
-create function family.confirm_choice(p_event uuid, p_slot uuid, p_place uuid, p_actor uuid) returns void
+create or replace function family.confirm_choice(p_event uuid, p_slot uuid, p_place uuid, p_actor uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
   ev    family.events;
@@ -238,7 +245,7 @@ begin
   perform family.homequest_sync(p_event);
 end $$;
 
-create function family.confirm_event(p_event uuid, p_slot uuid, p_place uuid) returns void
+create or replace function family.confirm_event(p_event uuid, p_slot uuid, p_place uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare st text; organiser uuid;
 begin
@@ -249,7 +256,7 @@ begin
   perform family.confirm_choice(p_event, p_slot, p_place, auth.uid());
 end $$;
 
-create function family.cancel_event(p_event uuid) returns void
+create or replace function family.cancel_event(p_event uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare ev family.events; organiser uuid;
 begin
@@ -266,7 +273,7 @@ begin
 end $$;
 
 -- Has every adult voted on every date? (Children may vote but nobody waits for them.)
-create function family.everyone_voted(p_event uuid) returns boolean
+create or replace function family.everyone_voted(p_event uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select not exists (
     select 1 from family.profiles pr, family.event_options o
@@ -276,7 +283,7 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- Replaces your votes on one event. p_votes: [{ option_id, answer }] for dates, [{ option_id, rank }] for places.
-create function family.cast_votes(p_event uuid, p_votes jsonb) returns text
+create or replace function family.cast_votes(p_event uuid, p_votes jsonb) returns text
 language plpgsql security definer set search_path = '' as $$
 declare
   ev   family.events;
@@ -313,7 +320,7 @@ begin
 end $$;
 
 -- Going / maybe / can't, for yourself or for a child in your household; optionally into HomeQuest.
-create function family.rsvp(p_event uuid, p_answer text, p_add_to_homequest boolean default false, p_for uuid default null)
+create or replace function family.rsvp(p_event uuid, p_answer text, p_add_to_homequest boolean default false, p_for uuid default null)
 returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -344,7 +351,7 @@ begin
 end $$;
 
 -- Busy times for your own household between two dates, for the voting grid. Times only.
-create function family.household_busy(p_from timestamptz, p_to timestamptz)
+create or replace function family.household_busy(p_from timestamptz, p_to timestamptz)
 returns table (starts_at timestamptz, ends_at timestamptz)
 language plpgsql stable security definer set search_path = '' as $$
 declare hh uuid;
@@ -360,7 +367,7 @@ end $$;
 -- ---------------------------------------------------------------------------------------------
 
 -- Voting deadlines that have passed: confirm the best date and place.
-create function family.close_due_events(p_now timestamptz default now()) returns int
+create or replace function family.close_due_events(p_now timestamptz default now()) returns int
 language plpgsql security definer set search_path = '' as $$
 declare e record; best record; n int := 0;
 begin
@@ -373,7 +380,7 @@ begin
 end $$;
 
 -- From 9am the day before, remind everyone who hasn't said they can't come.
-create function family.send_event_reminders(p_now timestamptz default now()) returns int
+create or replace function family.send_event_reminders(p_now timestamptz default now()) returns int
 language plpgsql security definer set search_path = '' as $$
 declare e record; n int := 0;
   local_now timestamp := p_now at time zone 'Europe/London';
@@ -411,9 +418,13 @@ alter table family.homequest_outbox enable row level security;
 
 -- Everything is written through the functions above; members can read it all (votes are open, like a
 -- sign-up sheet on the fridge).
+drop policy if exists events_select on family.events;
 create policy events_select on family.events for select to authenticated using (family.is_member());
+drop policy if exists event_options_select on family.event_options;
 create policy event_options_select on family.event_options for select to authenticated using (family.is_member());
+drop policy if exists event_votes_select on family.event_votes;
 create policy event_votes_select on family.event_votes for select to authenticated using (family.is_member());
+drop policy if exists event_rsvps_select on family.event_rsvps;
 create policy event_rsvps_select on family.event_rsvps for select to authenticated using (family.is_member());
 
 grant select on family.events, family.event_options, family.event_votes, family.event_rsvps to authenticated;
@@ -436,8 +447,13 @@ to authenticated;
 grant execute on function family.close_due_events(timestamptz), family.send_event_reminders(timestamptz) to service_role;
 
 do $$
+declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table family.events, family.event_votes, family.event_rsvps;
+    foreach t in array array['events', 'event_votes', 'event_rsvps'] loop
+      if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'family' and tablename = t) then
+        execute format('alter publication supabase_realtime add table family.%I', t);
+      end if;
+    end loop;
   end if;
 end $$;

@@ -4,18 +4,18 @@
 -- server, reached only through the photo gateway (gateway/), which checks the person's session on
 -- every request. This database only records which Immich asset belongs to which post.
 
-alter table family.posts drop constraint posts_kind_check;
+alter table family.posts drop constraint if exists posts_kind_check;
 alter table family.posts add constraint posts_kind_check
   check (kind in ('update', 'photo_album', 'podcast_episode', 'video', 'link', 'event', 'digest'));
 
-drop policy posts_insert on family.posts;
+drop policy if exists posts_insert on family.posts;
 create policy posts_insert on family.posts for insert to authenticated
   with check (
     family.is_member() and author_id = auth.uid() and not pinned
     and kind in ('update', 'link', 'video', 'podcast_episode', 'photo_album')
   );
 
-create table family.photo_assets (
+create table if not exists family.photo_assets (
   id              uuid primary key default gen_random_uuid(),
   post_id         uuid not null references family.posts (id) on delete cascade,
   immich_asset_id text not null,
@@ -26,20 +26,23 @@ create table family.photo_assets (
   position        int not null default 0,
   created_at      timestamptz not null default now()
 );
-create index photo_assets_post_idx on family.photo_assets (post_id, position);
-create index photo_assets_immich_idx on family.photo_assets (immich_asset_id);
-create index photo_assets_uploader_idx on family.photo_assets (uploaded_by);
+create index if not exists photo_assets_post_idx on family.photo_assets (post_id, position);
+create index if not exists photo_assets_immich_idx on family.photo_assets (immich_asset_id);
+create index if not exists photo_assets_uploader_idx on family.photo_assets (uploaded_by);
 
-alter table family.comments
-  add constraint comments_photo_asset_id_fkey foreign key (photo_asset_id) references family.photo_assets (id) on delete cascade;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'comments_photo_asset_id_fkey') then
+    alter table family.comments add constraint comments_photo_asset_id_fkey foreign key (photo_asset_id) references family.photo_assets (id) on delete cascade;
+  end if;
+end $$;
 
 -- Immich assets to move to Immich's bin once nothing here points at them. The gateway empties this.
-create table family.photo_deletions (
+create table if not exists family.photo_deletions (
   immich_asset_id text primary key,
   queued_at       timestamptz not null default now()
 );
 
-create function family.queue_photo_deletion() returns trigger
+create or replace function family.queue_photo_deletion() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
   if not exists (select 1 from family.photo_assets where immich_asset_id = old.immich_asset_id) then
@@ -47,6 +50,7 @@ begin
   end if;
   return old;
 end $$;
+drop trigger if exists photo_assets_queue_deletion on family.photo_assets;
 create trigger photo_assets_queue_deletion after delete on family.photo_assets
   for each row execute function family.queue_photo_deletion();
 
@@ -77,7 +81,7 @@ end $$;
 -- ---------------------------------------------------------------------------------------------
 
 -- May this person add a photo to this post? Their own album (any number), or their own update (one).
-create function family.photo_upload_allowed(p_post uuid, p_user uuid) returns boolean
+create or replace function family.photo_upload_allowed(p_post uuid, p_user uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from family.posts p
@@ -88,7 +92,7 @@ language sql stable security definer set search_path = '' as $$
   );
 $$;
 
-create function family.record_photo(
+create or replace function family.record_photo(
   p_post uuid, p_user uuid, p_immich text, p_width int, p_height int, p_taken timestamptz, p_position int
 ) returns family.photo_assets
 language plpgsql security definer set search_path = '' as $$
@@ -104,7 +108,7 @@ begin
 end $$;
 
 -- The album is uploaded: tell everyone else, once.
-create function family.publish_album(p_post uuid) returns void
+create or replace function family.publish_album(p_post uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare p family.posts;
 begin
@@ -127,8 +131,10 @@ end $$;
 alter table family.photo_assets    enable row level security;
 alter table family.photo_deletions enable row level security;
 
+drop policy if exists photo_assets_select on family.photo_assets;
 create policy photo_assets_select on family.photo_assets for select to authenticated using (family.is_member());
 -- Removing a photo: whoever uploaded it, or an admin. (Adding one only happens through the gateway.)
+drop policy if exists photo_assets_delete on family.photo_assets;
 create policy photo_assets_delete on family.photo_assets for delete to authenticated
   using (uploaded_by = auth.uid() or family.is_admin());
 
@@ -148,8 +154,13 @@ to service_role;
 grant execute on function family.publish_album(uuid) to authenticated;
 
 do $$
+declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table family.photo_assets;
+    foreach t in array array['photo_assets'] loop
+      if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'family' and tablename = t) then
+        execute format('alter publication supabase_realtime add table family.%I', t);
+      end if;
+    end loop;
   end if;
 end $$;
