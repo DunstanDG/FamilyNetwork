@@ -1,0 +1,97 @@
+import { useMemo, useState } from 'react';
+import { useAuth } from '../auth.jsx';
+import { useOutbox } from '../outbox.jsx';
+import { useFeed } from '../useFeed.js';
+import { findUnreadDivider } from '../lib/timeline.js';
+import Composer from './Composer.jsx';
+import PostCard from './PostCard.jsx';
+
+const FILTERS = [
+  { id: 'all', label: 'Everything', kind: null },
+  { id: 'update', label: 'Updates', kind: 'update' },
+  // Each later phase adds its own chip here: photo_album, podcast_episode, video, link, event.
+];
+
+export default function Feed({ module }) {
+  const isHome = module.id === 'home';
+  const [filter, setFilter] = useState('all');
+  const kind = isHome ? FILTERS.find((f) => f.id === filter).kind : module.kind;
+  const { profile, since } = useAuth();
+  const outbox = useOutbox();
+  const feed = useFeed(kind);
+
+  const queued = useMemo(() => {
+    if (kind && kind !== 'update') return [];
+    const loaded = new Set([...feed.pinned, ...feed.posts].map((p) => p.id));
+    return [...outbox.items, ...outbox.settled].filter((i) => i.type === 'post' && !loaded.has(i.id)).map((i) => ({
+      ...i.data, author_id: profile.id, author: profile, created_at: new Date(i.queuedAt).toISOString(),
+      reactions: [], comments: [], pinned: false, _pending: true, _failed: i.failed, _outboxId: i.id,
+    })).reverse();
+  }, [outbox.items, outbox.settled, kind, profile, feed.pinned, feed.posts]);
+
+  const divider = useMemo(() => findUnreadDivider(feed.posts, since, profile.id), [feed.posts, since, profile.id]);
+  const empty = feed.status === 'ready' && !feed.pinned.length && !feed.posts.length && !queued.length;
+
+  return (
+    <section aria-label={module.label}>
+      {isHome && <Composer />}
+
+      {isHome && (
+        <div className="chips" role="group" aria-label="Show">
+          {FILTERS.map((f) => (
+            <button key={f.id} className={`chip ${filter === f.id ? 'on' : ''}`} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!isHome && module.phase && (
+        <div className="soon">
+          <strong>{module.icon} {module.label} are on their way</strong>
+          <p>
+            {module.phase === 2
+              ? `Podcasts, videos and links move in here around ${module.when}. Until then, Family Feed carries on as normal.`
+              : `This arrives around ${module.when}.`}
+          </p>
+        </div>
+      )}
+
+      {feed.status === 'loading' && <p className="notice">Loading…</p>}
+      {feed.status === 'error' && (
+        <p className="msg error" role="alert">
+          Couldn’t load the timeline. {feed.error}{' '}
+          <button className="linkish" onClick={feed.reload}>Try again</button>
+        </p>
+      )}
+      {feed.status === 'offline' && <p className="notice">Showing what was saved on this device. It will update when you’re back online.</p>}
+
+      <div className="timeline">
+        {queued.map((p) => <PostCard key={p.id} post={p} />)}
+        {feed.pinned.map((p) => <PostCard key={p.id} post={p} />)}
+        {feed.posts.map((p, i) => (
+          <div key={p.id}>
+            {divider?.index === i && <UnreadLine count={divider.count} />}
+            <PostCard post={p} />
+          </div>
+        ))}
+        {divider && divider.index >= feed.posts.length && <UnreadLine count={divider.count} />}
+      </div>
+
+      {empty && isHome && <p className="notice center-text">Nothing here yet. Be the first to share something.</p>}
+      {feed.hasMore && (
+        <button className="mini wide" onClick={feed.loadMore} disabled={feed.loadingMore}>
+          {feed.loadingMore ? 'Loading…' : 'Show older posts'}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function UnreadLine({ count }) {
+  return (
+    <div className="unread-line" role="separator" aria-label={`${count} new since you last looked`}>
+      <span>{count} new since you last looked</span>
+    </div>
+  );
+}
