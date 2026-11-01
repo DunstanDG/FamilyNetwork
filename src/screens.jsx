@@ -34,7 +34,7 @@ export function ErrorScreen() {
     <main className="center">
       <Brand />
       <p className="msg error" role="alert">Couldn’t load your profile. {error}</p>
-      {schemaHint && <p className="hint">Check that the <code>family</code> schema has been added to “Exposed schemas” in Supabase (Project Settings → API), and that the migration has been run.</p>}
+      {schemaHint && <p className="hint">In Supabase, open Project Settings → Data API and add <code>family</code> to “Exposed schemas” (keep <code>public</code> there too), save, and reload in a minute. If it’s already there, check the migrations have all been run.</p>}
       <button className="primary wide" onClick={() => window.location.reload()}>Try again</button>
       <button className="mini wide" onClick={signOut}>Sign out</button>
     </main>

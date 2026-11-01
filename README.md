@@ -52,7 +52,10 @@ household), a relative who signs in could read that table through HomeQuest's AP
    0002 to 0005 are safe to run again. If one stops part-way (for example with "relation … already
    exists"), run that file again, then every file after it, in order: a later file sometimes updates
    something an earlier one created, so re-running only an earlier one would undo that.
-2. **Project Settings → API → Exposed schemas**: add `family`.
+2. **Project Settings → Data API → Exposed schemas**: add `family` (keep `public` and `graphql_public`,
+   which HomeQuest needs), save, and allow a minute. Until this is done the app says
+   "Invalid schema: family". If it still does after saving, run
+   `notify pgrst, 'reload config'; notify pgrst, 'reload schema';` in the SQL editor.
 3. Check the function permissions really are locked down (Supabase can grant functions to signed-in
    users by default, which the tests here can't see):
 
