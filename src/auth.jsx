@@ -27,6 +27,24 @@ export function captureInvite() {
   window.history.replaceState({}, '', url.pathname + url.search + url.hash);
 }
 
+// Coming back from an emailed sign-in link: the address carries ?code=... (handled by Supabase) or,
+// when the link is stale, an error. Note both before anything tidies the address bar.
+let linkReturn = { hadCode: false, error: '' };
+export function captureAuthReturn() {
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const errorText = url.searchParams.get('error_description') || hash.get('error_description');
+  const errorCode = url.searchParams.get('error_code') || hash.get('error_code');
+  linkReturn = { hadCode: url.searchParams.has('code'), error: '' };
+  if (errorText || errorCode) {
+    linkReturn.error = errorCode === 'otp_expired' || /expired|invalid/i.test(errorText || '')
+      ? 'That sign-in link has expired or was already used. Ask for a new one below.'
+      : `That sign-in link didn’t work (${errorText || errorCode}). Ask for a new one below.`;
+    ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
+    window.history.replaceState({}, '', url.pathname + url.search);
+  }
+}
+
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ status: configured ? 'loading' : 'unconfigured', session: null, profile: null, error: '' });
   const [since, setSince] = useState(null);
@@ -43,9 +61,21 @@ export function AuthProvider({ children }) {
   const applySession = useCallback(async (session) => {
     if (!session) {
       loadingUid.current = null;
-      setState({ status: 'signedOut', session: null, profile: null, error: '' });
+      // A link that came back with a code but no session was opened in a different browser or app
+      // from the one that asked for it.
+      const error = linkReturn.error || (linkReturn.hadCode
+        ? 'That link was opened in a different browser or app from the one you asked from. Ask for a new link here, then open the email on this device and tap the link.'
+        : '');
+      // Kept (not cleared) here: on start-up this runs more than once with no session, and the
+      // message must survive until the person actually signs in.
+      if (error) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('code')) { url.searchParams.delete('code'); window.history.replaceState({}, '', url.pathname + url.search); }
+      }
+      setState({ status: 'signedOut', session: null, profile: null, error });
       return;
     }
+    linkReturn = { hadCode: false, error: '' };
     const uid = session.user.id;
     if (loadingUid.current === uid) return;
     loadingUid.current = uid;

@@ -481,6 +481,21 @@ async function handle(route) {
   check('uninvited people are told it is private and cannot see anything', (await p3.locator('.msg.error').innerText()).includes('invite') && await p3.locator('.post').count() === 0 && await p3.locator('#name').count() === 0);
   await stranger.close();
 
+  // ================= an emailed link opened in a different browser =================
+  const other = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await other.route(`${HOST}/**`, handle);
+  const p5 = await other.newPage();
+  await p5.goto(`${APP}?code=0b0c1d2e-0000-4000-8000-000000000000`);
+  await p5.waitForSelector('.msg.error', { timeout: 10000 });
+  check('a sign-in link opened in another browser explains what to do', (await p5.locator('.msg.error').innerText()).includes('different browser'));
+  await p5.getByRole('button', { name: 'Use my email instead' }).click();
+  await p5.locator('#email').fill('nan@example.com');
+  await p5.getByRole('button', { name: 'Email me a sign-in link' }).click();
+  await p5.waitForSelector('.big-steps');
+  check('after asking for an email, people are told to tap the link on this device', (await p5.locator('.big-steps').innerText()).includes('on this device'));
+  await p5.screenshot({ path: `${SHOTS}/8-email-sent.png` });
+  await other.close();
+
   // ================= sharing from another app =================
   const sharer = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   await sharer.route(`${HOST}/**`, handle);

@@ -1,3 +1,4 @@
+import { isIos, isStandalone } from './push.js';
 import { useState } from 'react';
 import { useAuth } from './auth.jsx';
 import { Message } from './components/ui.jsx';
@@ -51,12 +52,15 @@ function InviteBanner() {
 }
 
 export function SignIn() {
-  const { signInGoogle, sendCode, verifyCode } = useAuth();
-  const [step, setStep] = useState('choose'); // choose | email | code
+  const { signInGoogle, sendCode, verifyCode, error: linkError } = useAuth();
+  const [step, setStep] = useState('choose'); // choose | email | sent
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Email links open in Safari, never inside an iPhone home-screen app, so they can't sign it in.
+  const iosApp = isIos() && isStandalone();
 
   async function google() {
     setBusy(true); setError('');
@@ -69,8 +73,12 @@ export function SignIn() {
     setBusy(true); setError('');
     const { error: err } = await sendCode(email.trim());
     setBusy(false);
-    if (err) return setError(err.message);
-    setStep('code');
+    if (err) {
+      return setError(/rate limit|too many/i.test(err.message)
+        ? 'Too many emails have been sent for now. Wait a while and try again, or continue with Google.'
+        : err.message);
+    }
+    setStep('sent');
     return undefined;
   }
 
@@ -79,7 +87,7 @@ export function SignIn() {
     setBusy(true); setError('');
     const { error: err } = await verifyCode(email.trim(), code.replace(/\s/g, ''));
     setBusy(false);
-    if (err) setError('That code didn’t work. Check it and try again, or ask for a new one.');
+    if (err) setError('That code didn’t work. Check it and try again, or ask for a new email.');
   }
 
   return (
@@ -90,26 +98,42 @@ export function SignIn() {
         <>
           <button className="primary wide" onClick={google} disabled={busy}>Continue with Google</button>
           <button className="mini wide" onClick={() => setStep('email')}>Use my email instead</button>
+          {iosApp && <p className="hint">On iPhone, Google is easiest here: links in emails open in Safari, not in this app.</p>}
         </>
       )}
       {step === 'email' && (
         <form onSubmit={email_}>
           <label className="label" htmlFor="email">Your email address</label>
           <input id="email" className="field" type="email" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button className="primary wide" disabled={busy || !email.trim()}>Email me a code</button>
+          <button className="primary wide" disabled={busy || !email.trim()}>Email me a sign-in link</button>
           <button type="button" className="mini wide" onClick={() => setStep('choose')}>Back</button>
         </form>
       )}
-      {step === 'code' && (
-        <form onSubmit={verify}>
-          <p className="hint">We’ve emailed a code to {email}. It can take a minute to arrive.</p>
-          <label className="label" htmlFor="code">The code from the email</label>
-          <input id="code" className="field code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
-          <button className="primary wide" disabled={busy || code.replace(/\s/g, '').length < 6}>Sign in</button>
-          <button type="button" className="mini wide" onClick={() => { setStep('email'); setCode(''); }}>Use a different email</button>
-        </form>
+      {step === 'sent' && (
+        <div>
+          <p className="msg ok" role="status">We’ve emailed {email}. It can take a minute to arrive.</p>
+          {iosApp ? (
+            <p className="hint">On iPhone, the link in the email opens in Safari rather than in this app, so it can’t sign you in here. Continue with Google below, or use the code if the email has one.</p>
+          ) : (
+            <ol className="big-steps">
+              <li>Open the email <strong>on this device</strong>, in the same browser.</li>
+              <li>Tap the sign-in link. It brings you straight back here, signed in.</li>
+            </ol>
+          )}
+          {!showCode
+            ? <button type="button" className="linkish" onClick={() => setShowCode(true)}>The email has a 6-digit code instead</button>
+            : (
+              <form onSubmit={verify}>
+                <label className="label" htmlFor="code">The code from the email</label>
+                <input id="code" className="field code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
+                <button className="primary wide" disabled={busy || code.replace(/\s/g, '').length < 6}>Sign in</button>
+              </form>
+            )}
+          <button type="button" className="mini wide" onClick={() => { setStep('email'); setCode(''); setShowCode(false); }}>Send it again, or use a different email</button>
+          <button type="button" className="mini wide" onClick={google}>Continue with Google instead</button>
+        </div>
       )}
-      <Message tone="error">{error}</Message>
+      <Message tone="error">{error || (step === 'choose' ? linkError : '')}</Message>
     </main>
   );
 }

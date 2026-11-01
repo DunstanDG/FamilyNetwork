@@ -74,9 +74,18 @@ household), a relative who signs in could read that table through HomeQuest's AP
 - **Authentication → Providers → Google**: enable, with your Google OAuth client.
 - **Authentication → URL Configuration → Redirect URLs**: add
   `https://<your-github-username>.github.io/FamilyNetwork/` (and `http://localhost:5173/` for local work).
-- **Authentication → Email Templates → Magic Link**: make sure the template includes `{{ .Token }}`
-  (the app asks people to type the code, which works inside an installed iPhone app where magic links
-  don't). This template is shared by every app in the project, so keep any link you already have too.
+- **Email sign-in** works out of the box with Supabase's built-in email, with two limits:
+  - Supabase's built-in email only sends to members of your Supabase organisation, a few an hour.
+    For relatives to sign in by email, connect your own sender under **Authentication → Emails →
+    SMTP Settings** (a Gmail address with an app password is enough for a family; Brevo and Resend
+    have free tiers). Until then, relatives should use **Continue with Google**.
+  - The built-in email contains a sign-in **link**, which works when opened on the same device and
+    browser the person asked from (Android and Chromebooks, including the installed app, and Safari
+    on iPhone). It can't sign in the installed iPhone app, because email links open in Safari; the
+    app says so and points iPhone users to Google. Once you have your own sender you can also edit
+    **Authentication → Emails → Templates → Magic Link** to add `Your code: {{ .Token }}`; the app
+    then accepts the 6-digit code too, which works everywhere. The template is shared with HomeQuest,
+    so keep its existing link.
 
 ### 4. Push notifications
 

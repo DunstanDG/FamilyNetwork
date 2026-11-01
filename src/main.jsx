@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
-import { captureInvite } from './auth.jsx';
+import { captureAuthReturn, captureInvite } from './auth.jsx';
 import { captureShare } from './shareTarget.js';
 import './styles.css';
 
@@ -12,6 +12,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   window.dispatchEvent(new Event('fn:installable'));
 });
 
+captureAuthReturn();
 captureInvite();
 captureShare();
 

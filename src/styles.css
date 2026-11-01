@@ -400,3 +400,4 @@ body.has-player { padding-bottom: calc(176px + env(safe-area-inset-bottom)); }
 .up-date { width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; border-radius: 12px; background: var(--green); color: var(--on-green); padding: 4px 0; line-height: 1.1; }
 .up-date strong { font-size: 1.2rem; }
 .upcoming-row .up-date small { color: inherit; opacity: .9; }
+.center .big-steps, .center .hint { text-align: left; }
