@@ -1,7 +1,20 @@
 import { isIos, isStandalone } from './push.js';
 import { useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { Message } from './components/ui.jsx';
+import { Ico, Message } from './components/ui.jsx';
+import { Lock, Mail } from 'lucide-react';
+
+// Google's own "G", so the button is instantly recognisable.
+const GoogleG = () => (
+  <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+    <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+  </svg>
+);
+
+const Private = () => <p className="fineprint"><Ico as={Lock} size={14} />Private to invited family. No ads, no tracking.</p>;
 
 function Brand() {
   return (
@@ -14,7 +27,7 @@ function Brand() {
 }
 
 export const Splash = () => (
-  <main className="center"><Brand /><p className="notice">Loading…</p></main>
+  <main className="center"><Brand /><div className="auth-card" aria-busy="true"><span className="sk sk-line" style={{ display: 'block', width: '70%', margin: '6px auto' }} /><span className="sk sk-line" style={{ display: 'block', width: '45%', margin: '12px auto 6px' }} /></div></main>
 );
 
 export const Unconfigured = () => (
@@ -33,10 +46,12 @@ export function ErrorScreen() {
   return (
     <main className="center">
       <Brand />
-      <p className="msg error" role="alert">Couldn’t load your profile. {error}</p>
-      {schemaHint && <p className="hint">In Supabase, open Project Settings → Data API and add <code>family</code> to “Exposed schemas” (keep <code>public</code> there too), save, and reload in a minute. If it’s already there, check the migrations have all been run.</p>}
-      <button className="primary wide" onClick={() => window.location.reload()}>Try again</button>
-      <button className="mini wide" onClick={signOut}>Sign out</button>
+      <div className="auth-card">
+        <p className="msg error" role="alert">Couldn’t load your profile. {error}</p>
+        {schemaHint && <p className="hint">In Supabase, open Project Settings → Data API and add <code>family</code> to “Exposed schemas” (keep <code>public</code> there too), save, and reload in a minute. If it’s already there, check the migrations have all been run.</p>}
+        <button className="primary wide" onClick={() => window.location.reload()}>Try again</button>
+        <button className="mini wide" onClick={signOut}>Sign out</button>
+      </div>
     </main>
   );
 }
@@ -93,11 +108,13 @@ export function SignIn() {
   return (
     <main className="center">
       <Brand />
+      <div className="auth-card">
       <InviteBanner />
       {step === 'choose' && (
         <>
-          <button className="primary wide" onClick={google} disabled={busy}>Continue with Google</button>
-          <button className="mini wide" onClick={() => setStep('email')}>Use my email instead</button>
+          <button className="primary wide google" onClick={google} disabled={busy}><GoogleG />Continue with Google</button>
+          <div className="or">or</div>
+          <button className="mini wide" onClick={() => setStep('email')}><Ico as={Mail} />Use my email instead</button>
           {iosApp && <p className="hint">On iPhone, Google is easiest here: links in emails open in Safari, not in this app.</p>}
         </>
       )}
@@ -130,10 +147,12 @@ export function SignIn() {
               </form>
             )}
           <button type="button" className="mini wide" onClick={() => { setStep('email'); setCode(''); setShowCode(false); }}>Send it again, or use a different email</button>
-          <button type="button" className="mini wide" onClick={google}>Continue with Google instead</button>
+          <button type="button" className="mini wide" onClick={google}><GoogleG />Continue with Google instead</button>
         </div>
       )}
       <Message tone="error">{error || (step === 'choose' ? linkError : '')}</Message>
+      </div>
+      <Private />
     </main>
   );
 }
@@ -156,9 +175,10 @@ export function Join() {
   return (
     <main className="center">
       <Brand />
+      <div className="auth-card">
       {usable ? (
         <form onSubmit={submit}>
-          <p className="hint">Welcome! What should the family call you?</p>
+          <p className="msg ok" role="status">You’re invited! What should the family call you?</p>
           <label className="label" htmlFor="name">Your name</label>
           <input id="name" className="field" maxLength={40} required autoComplete="given-name" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="primary wide" disabled={busy || !name.trim()}>{busy ? 'Joining…' : 'Join the family'}</button>
@@ -175,6 +195,8 @@ export function Join() {
       )}
       <Message tone="error">{error}</Message>
       <button className="mini wide" onClick={signOut}>Sign out</button>
+      </div>
+      <Private />
     </main>
   );
 }

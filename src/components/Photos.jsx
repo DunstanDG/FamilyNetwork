@@ -9,14 +9,15 @@ import { ago } from '../lib/time.js';
 import { uuid } from '../lib/uuid.js';
 import { notifyChanged } from '../hooks.js';
 import MentionTextarea from './MentionTextarea.jsx';
-import { Body, Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Body, Ico, Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Camera, ChevronLeft, ChevronRight, Download, ImageOff, ImagePlus, Trash2, X } from 'lucide-react';
 
 const byPosition = (a, b) => (a.position - b.position) || (a.id < b.id ? -1 : 1);
 export const sortedPhotos = (post) => [...(post.photos || [])].sort(byPosition);
 
 export function PhotoImg({ id, size = 'thumbnail', alt = '', className = '', style }) {
   const { url, error } = usePhotoUrl(id, size);
-  if (error) return <span className={`photo-missing ${className}`} style={style} title={error}>📷</span>;
+  if (error) return <span className={`photo-missing ${className}`} style={style} title={error}><Ico as={ImageOff} size={24} /></span>;
   if (!url) return <span className={`photo-loading ${className}`} style={style} aria-hidden="true" />;
   return <img src={url} alt={alt} className={className} style={style} draggable={false} />;
 }
@@ -119,9 +120,9 @@ export function PhotoViewer({ post, start = 0, onClose }) {
       <div className="viewer-top">
         <span>{i + 1} / {photos.length}</span>
         <div className="row">
-          <button className="viewer-btn" onClick={download} disabled={busy} aria-label="Download the original">⤓</button>
-          {canRemove && <button className="viewer-btn" onClick={remove} aria-label="Remove this photo">🗑</button>}
-          <button className="viewer-btn" onClick={onClose} aria-label="Close">✕</button>
+          <button className="viewer-btn" onClick={download} disabled={busy} aria-label="Download the original"><Ico as={Download} /></button>
+          {canRemove && <button className="viewer-btn" onClick={remove} aria-label="Remove this photo"><Ico as={Trash2} /></button>}
+          <button className="viewer-btn" onClick={onClose} aria-label="Close"><Ico as={X} /></button>
         </div>
       </div>
       <div
@@ -134,9 +135,9 @@ export function PhotoViewer({ post, start = 0, onClose }) {
           if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
         }}
       >
-        {i > 0 && <button className="viewer-nav prev" onClick={() => go(-1)} aria-label="Previous photo">‹</button>}
+        {i > 0 && <button className="viewer-nav prev" onClick={() => go(-1)} aria-label="Previous photo"><Ico as={ChevronLeft} size={26} /></button>}
         <PhotoImg key={photo.id} id={photo.id} size="preview" className="viewer-img" alt={`Photo ${i + 1}`} />
-        {i < photos.length - 1 && <button className="viewer-nav next" onClick={() => go(1)} aria-label="Next photo">›</button>}
+        {i < photos.length - 1 && <button className="viewer-nav next" onClick={() => go(1)} aria-label="Next photo"><Ico as={ChevronRight} size={26} /></button>}
       </div>
       <div className="viewer-talk">
         {photo.taken_at && <p className="when">{new Date(photo.taken_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
@@ -183,13 +184,13 @@ export function PhotoPicker({ files, onChange, multiple = true, label = 'Choose 
           {files.map((f, i) => (
             <li key={`${f.name}-${f.lastModified}-${i}`}>
               <img src={urls[i]} alt="" />
-              <button type="button" className="picker-x" onClick={() => onChange(files.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`}>✕</button>
+              <button type="button" className="picker-x" onClick={() => onChange(files.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`}><Ico as={X} size={14} stroke={2.6} /></button>
             </li>
           ))}
         </ul>
       )}
-      <label className="mini file-label">
-        📷 {files.length && multiple ? 'Add more' : label}
+      <label className="mini file-label" aria-label={multiple ? undefined : 'Add a photo'}>
+        <Ico as={files.length && multiple ? ImagePlus : Camera} />{files.length && multiple ? 'Add more' : label}
         <input type="file" accept="image/jpeg,image/png,image/webp,image/*" multiple={multiple} onChange={pick} hidden />
       </label>
       {problems.map((p) => <p key={p} className="msg error">{p}</p>)}

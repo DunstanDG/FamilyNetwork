@@ -9,7 +9,8 @@ import { uuid } from '../lib/uuid.js';
 import { notifyChanged } from '../hooks.js';
 import MentionTextarea from './MentionTextarea.jsx';
 import Reactions from './Reactions.jsx';
-import { Body, Message, PersonAvatar } from './ui.jsx';
+import { Body, Ico, Message, PersonAvatar } from './ui.jsx';
+import { Camera, Send } from 'lucide-react';
 
 const byTime = (a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
 
@@ -47,7 +48,8 @@ function Comment({ comment, isReply, onReply }) {
         <div className="comment-bubble">
           <p className="who">
             <strong>{(comment.author || {}).display_name || 'Someone'}</strong>
-            <span className="when">{pending ? 'Sending…' : ago(comment.created_at)}{comment.edited_at ? ' · edited' : ''}{comment.photo_asset_id && !isReply ? ' · 📷 on a photo' : ''}</span>
+            <span className="when">{pending ? 'Sending…' : ago(comment.created_at)}{comment.edited_at ? ' · edited' : ''}</span>
+            {comment.photo_asset_id && !isReply && <span className="when kind-tag"><Ico as={Camera} size={13} />on a photo</span>}
           </p>
           {editing ? (
             <>
@@ -155,8 +157,8 @@ export default function Thread({ post }) {
             <button type="button" className="linkish" onClick={() => { setReplyTo(null); setText(''); }}>Cancel</button>
           </p>
         )}
-        <MentionTextarea value={text} onChange={setText} onSubmit={send} rows={2} placeholder="Write a reply…" label="Write a reply" />
-        <button className="primary" type="submit" disabled={!text.trim()}>Reply</button>
+        <MentionTextarea value={text} onChange={setText} onSubmit={send} rows={1} placeholder="Write a reply…" label="Write a reply" />
+        <button className="primary" type="submit" disabled={!text.trim()} aria-label="Reply"><Ico as={Send} size={18} /><span className="hide-narrow">Reply</span></button>
         <Message tone="">{note}</Message>
       </form>
     </div>

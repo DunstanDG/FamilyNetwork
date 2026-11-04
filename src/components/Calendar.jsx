@@ -7,13 +7,14 @@ import { ANSWERS, buildIcs, defaultDeadline, isBusy, scoreEvent, slotLabel, vote
 import { normaliseLink } from '../lib/timeline.js';
 import { uuid } from '../lib/uuid.js';
 import { notifyChanged, openPost, useOnChanged } from '../hooks.js';
-import { Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Ico, Message, PersonAvatar, Sheet } from './ui.jsx';
+import { CalendarDays, CalendarPlus, Check, CheckCircle2, CircleHelp, House, MapPin, Plus, Star, X } from 'lucide-react';
 
 const one = (x) => (Array.isArray(x) ? x[0] : x);
 const RSVP = [
-  { key: 'going', label: 'Going', icon: '👍' },
-  { key: 'maybe', label: 'Maybe', icon: '🤔' },
-  { key: 'not_going', label: 'Can’t make it', icon: '🙁' },
+  { key: 'going', label: 'Going', icon: Check },
+  { key: 'maybe', label: 'Maybe', icon: CircleHelp },
+  { key: 'not_going', label: 'Can’t make it', icon: X },
 ];
 
 // <input type="datetime-local"> works in the device's own time; convert both ways.
@@ -96,12 +97,12 @@ export function ProposeEvent({ onClose }) {
                 <span className="label">Finishes (optional)</span>
                 <input className="field" type="datetime-local" value={s.end} min={s.start} onChange={(e) => setSlot(i, { end: e.target.value })} />
               </label>
-              {clash && <span className="busy-chip">🏠 Busy at home</span>}
+              {clash && <span className="busy-chip"><Ico as={House} size={13} />Busy at home</span>}
               {slots.length > 2 && <button type="button" className="linkish danger" onClick={() => setSlots((l) => l.filter((_, j) => j !== i))}>Remove</button>}
             </div>
           );
         })}
-        {slots.length < 6 && <button type="button" className="mini" onClick={() => setSlots((l) => [...l, { start: '', end: '' }])}>＋ Another date</button>}
+        {slots.length < 6 && <button type="button" className="mini" onClick={() => setSlots((l) => [...l, { start: '', end: '' }])}><Ico as={Plus} />Another date</button>}
 
         <h3>Where? <span className="hint">(1 to 4 choices)</span></h3>
         {places.map((p, i) => (
@@ -111,7 +112,7 @@ export function ProposeEvent({ onClose }) {
             {places.length > 1 && <button type="button" className="linkish danger" onClick={() => setPlaces((l) => l.filter((_, j) => j !== i))}>Remove</button>}
           </div>
         ))}
-        {places.length < 4 && <button type="button" className="mini" onClick={() => setPlaces((l) => [...l, { name: '', url: '' }])}>＋ Another place</button>}
+        {places.length < 4 && <button type="button" className="mini" onClick={() => setPlaces((l) => [...l, { name: '', url: '' }])}><Ico as={Plus} />Another place</button>}
 
         <h3>Voting closes</h3>
         <input className="field" type="datetime-local" value={deadline || toLocalInput(suggested)} onChange={(e) => setDeadline(e.target.value)} aria-label="Voting closes" />
@@ -209,8 +210,8 @@ function Voting({ post, ev, options }) {
             <li key={o.id} className={`vote-row ${live.bestSlot === o.id ? 'best' : ''}`}>
               <div className="vote-head">
                 <strong>{slotLabel(o)}</strong>
-                {live.bestSlot === o.id && s.score > 0 && <span className="badge">★ Leading</span>}
-                {isBusy(o, busy) && <span className="busy-chip">🏠 Busy at home</span>}
+                {live.bestSlot === o.id && s.score > 0 && <span className="badge brand"><Ico as={Star} size={12} className="filled" />Leading</span>}
+                {isBusy(o, busy) && <span className="busy-chip"><Ico as={House} size={13} />Busy at home</span>}
               </div>
               <div className="score-bar" aria-hidden="true"><span style={{ width: `${(s.score / live.max) * 100}%` }} /></div>
               <p className="hint">{s.counts.yes} yes · {s.counts.if_needed} if needed · {s.counts.no} no</p>
@@ -218,7 +219,7 @@ function Voting({ post, ev, options }) {
                 <div className="answer-row" role="group" aria-label={`Can you do ${slotLabel(o)}?`}>
                   {ANSWERS.map((a) => (
                     <button key={a.key} type="button" className={`answer ${a.key} ${draft[o.id] === a.key ? 'on' : ''}`} aria-pressed={draft[o.id] === a.key} onClick={() => answer(o.id, a.key)}>
-                      {a.icon} {a.label}
+                      {a.label}
                     </button>
                   ))}
                 </div>
@@ -241,7 +242,7 @@ function Voting({ post, ev, options }) {
                   <strong>{o.place_name}</strong>
                   {places.length > 1 && <span className="hint"> · {s.score} pts</span>}
                 </span>
-                {live.bestPlace === o.id && places.length > 1 && s.score > 0 && <span className="badge">★</span>}
+                {live.bestPlace === o.id && places.length > 1 && s.score > 0 && <span className="badge brand"><Ico as={Star} size={12} className="filled" />Leading</span>}
               </button>
               {o.place_url && normaliseLink(o.place_url) && <a className="linkish" href={normaliseLink(o.place_url)} target="_blank" rel="noopener noreferrer">Map / website</a>}
             </li>
@@ -258,7 +259,7 @@ function Voting({ post, ev, options }) {
             ? <ConfirmPicker ev={ev} options={options} best={live} onDone={() => setPicking(false)} />
             : (
               <div className="row wrap">
-                <button className="mini" onClick={() => setPicking(true)}>✅ Decide now</button>
+                <button className="mini" onClick={() => setPicking(true)}><Ico as={CheckCircle2} />Decide now</button>
                 <CancelButton ev={ev} />
               </div>
             )}
@@ -351,9 +352,9 @@ function Confirmed({ post, ev, options }) {
   return (
     <div className="event confirmed">
       <p className="event-title">{ev.title}</p>
-      <p className="event-when">📅 {slot ? slotLabel(slot) : 'Date to be confirmed'}</p>
+      <p className="event-when"><Ico as={CalendarDays} />{slot ? slotLabel(slot) : 'Date to be confirmed'}</p>
       {place && (
-        <p className="event-where">📍 {place.place_url && normaliseLink(place.place_url)
+        <p className="event-where"><Ico as={MapPin} />{place.place_url && normaliseLink(place.place_url)
           ? <a href={normaliseLink(place.place_url)} target="_blank" rel="noopener noreferrer">{place.place_name}</a>
           : place.place_name}</p>
       )}
@@ -371,7 +372,7 @@ function Confirmed({ post, ev, options }) {
           <div className="answer-row" role="group" aria-label="Are you coming?">
             {RSVP.map((r) => (
               <button key={r.key} className={`answer ${r.key} ${mine?.answer === r.key ? 'on' : ''}`} aria-pressed={mine?.answer === r.key} onClick={() => answer(null, r.key)}>
-                {r.icon} {r.label}
+                <Ico as={r.icon} size={18} />{r.label}
               </button>
             ))}
           </div>
@@ -405,7 +406,7 @@ function Confirmed({ post, ev, options }) {
               })}
             </div>
           )}
-          {slot && <button className="mini wide" onClick={ics}>📅 Add to my calendar</button>}
+          {slot && <button className="mini wide" onClick={ics}><Ico as={CalendarPlus} />Add to my calendar</button>}
         </>
       )}
       <Message tone={note.tone}>{note.text}</Message>

@@ -207,7 +207,7 @@ async function handle(route) {
   check('six tabs in the bottom nav', await page.locator('.tabs button').count() === 6);
   check('pinned post comes first', (await page.locator('.post').first().getAttribute('class')).includes('pinned'));
   check('posts are newest first after the pin', (await page.locator('.post').nth(1).innerText()).includes('beach'));
-  check('unread line is shown with the right count', (await page.locator('.unread-line').innerText()).startsWith('6 new'), await page.locator('.unread-line').innerText());
+  check('unread line is shown with the right count', (await page.locator('.unread-line').innerText()).toLowerCase().startsWith('6 new'), await page.locator('.unread-line').innerText());
   const idx = await page.evaluate(() => [...document.querySelectorAll('.timeline > .post, .timeline > div > .post, .unread-line')].map((e) => (e.classList.contains('unread-line') ? 'LINE' : e.id)).join(','));
   check('unread line sits above the first post already seen', idx.startsWith('p-p-pinned,p-p-new1,') && idx.endsWith('p-p-new2,LINE,p-p-party,p-p-old'), idx);
   check('auto-posted episodes stay inside the daily digest on Home', idx.includes('p-p-digest') && !idx.includes('p-p-ep') && !idx.includes('p-p-autovid'), idx);
@@ -403,6 +403,7 @@ async function handle(route) {
   check('invite link points at the app with the code', link === `${APP}?invite=abc123def456abc123def456abc123de`, link);
   check('invite request carried role and label', log.some((l) => l.m === 'POST invites' && l.b.role === 'child' && l.b.note === 'Nan'));
   check('WhatsApp share link is offered', await page.locator('.invite a[href^="https://wa.me/"]').count() === 1);
+  await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/4-family.png` });
   await page.keyboard.press('Escape');
   check('Escape closes the sheet', await page.locator('.sheet').count() === 0);
@@ -419,8 +420,26 @@ async function handle(route) {
   // --- settings
   await page.getByRole('button', { name: 'Your settings' }).click();
   check('settings shows name and role', (await page.locator('.me').innerText()).includes('Alex Morgan'));
+  await page.waitForTimeout(400); // sheet opening animation
   await page.screenshot({ path: `${SHOTS}/5-settings.png` });
 
+
+  // --- wide screens (Chromebook, laptop) and dark mode
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.locator('.tabs button', { hasText: 'Home' }).click();
+  await page.waitForTimeout(300);
+  const side = await page.locator('.tabs').boundingBox();
+  check('wide screens get a sidebar instead of bottom tabs', side.height > 400 && side.width < 300, JSON.stringify(side));
+  await page.screenshot({ path: `${SHOTS}/9-desktop.png` });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(400); // let colour transitions finish
+  await page.screenshot({ path: `${SHOTS}/9b-desktop-dark.png`, clip: { x: 0, y: 0, width: 1280, height: 520 } });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.tabs button', { hasText: 'Calendar' }).click();
+  await page.waitForSelector('#p-p-vote');
+  await page.screenshot({ path: `${SHOTS}/9c-phone-dark.png` });
+  await page.emulateMedia({ colorScheme: 'light' });
 
   // ================= a brand-new relative =================
   // 1. Opens the invite link while signed out.

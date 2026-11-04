@@ -12,7 +12,9 @@ import { KIND_NAME, buildPost } from '../lib/share.js';
 import { uuid } from '../lib/uuid.js';
 import MentionTextarea from './MentionTextarea.jsx';
 import { LinkPreview } from './cards.jsx';
-import { Message } from './ui.jsx';
+import { Ico, Message, PersonAvatar } from './ui.jsx';
+import { Link2, Send } from 'lucide-react';
+import { useAuth } from '../auth.jsx';
 
 const PLACEHOLDER = {
   home: 'Share something with the family…',
@@ -23,6 +25,7 @@ const PLACEHOLDER = {
 // type. `linkFirst` is for the Podcasts, Videos and News tabs, where sharing a link is the point.
 export default function Composer({ linkFirst = false, linkHint = 'Paste a link', initial = null, onPosted, extra = null }) {
   const { members } = useMembers();
+  const { profile } = useAuth();
   const outbox = useOutbox();
   const [text, setText] = useState(initial?.text || '');
   const [link, setLink] = useState(initial?.url || '');
@@ -98,20 +101,29 @@ export default function Composer({ linkFirst = false, linkHint = 'Paste a link',
   return (
     <form className="composer card-lite" onSubmit={submit}>
       {linkFirst && (
-        <input
-          className="field" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
-          placeholder={linkHint} aria-label="Link to share" autoComplete="off"
-        />
+        <div className="link-field">
+          <Ico as={Link2} />
+          <input
+            className="field" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
+            placeholder={linkHint} aria-label="Link to share" autoComplete="off"
+          />
+        </div>
       )}
-      <MentionTextarea
-        value={text} onChange={setText} onSubmit={submit} rows={linkFirst ? 2 : 3} maxLength={5000}
-        placeholder={PLACEHOLDER[linkFirst ? 'link' : 'home']} label={linkFirst ? 'Say something about it' : 'Write an update'}
-      />
-      {showLink && !linkFirst && (
-        <input
-          className="field" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
-          placeholder="Paste a link: a video, a podcast episode or an article" aria-label="Link to share" autoComplete="off"
+      <div className="composer-main">
+        {!linkFirst && <PersonAvatar person={profile} size={40} />}
+        <MentionTextarea
+          value={text} onChange={setText} onSubmit={submit} rows={linkFirst ? 1 : 2} maxLength={5000}
+          placeholder={PLACEHOLDER[linkFirst ? 'link' : 'home']} label={linkFirst ? 'Say something about it' : 'Write an update'}
         />
+      </div>
+      {showLink && !linkFirst && (
+        <div className="link-field" style={{ marginTop: 10 }}>
+          <Ico as={Link2} />
+          <input
+            className="field" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} autoFocus
+            placeholder="Paste a link: a video, a podcast episode or an article" aria-label="Link to share" autoComplete="off"
+          />
+        </div>
       )}
       {url && (
         <div className="composer-preview">
@@ -124,14 +136,14 @@ export default function Composer({ linkFirst = false, linkHint = 'Paste a link',
       <div className="composer-actions">
         <div className="row wrap">
           {!linkFirst && !photo.length && (
-            <button type="button" className="mini" onClick={() => setShowLink((s) => !s)} aria-pressed={showLink}>
-              🔗 {showLink ? 'Remove link' : 'Share a link'}
+            <button type="button" className="mini" onClick={() => setShowLink((s) => !s)} aria-pressed={showLink} aria-label={showLink ? 'Remove the link' : 'Share a link'}>
+              <Ico as={Link2} />{showLink ? 'No link' : 'Link'}
             </button>
           )}
-          {canPhoto && <PhotoPicker files={photo} onChange={setPhoto} multiple={false} label="Add a photo" />}
+          {canPhoto && <PhotoPicker files={photo} onChange={setPhoto} multiple={false} label="Photo" />}
         </div>
         <button className="primary" type="submit" disabled={busy || (!text.trim() && !url && !photo.length)}>
-          {busy ? 'Posting…' : 'Post'}
+          {busy ? 'Posting…' : <><Ico as={Send} size={18} />Post</>}
         </button>
       </div>
       <Message tone={note.tone}>{note.text}</Message>

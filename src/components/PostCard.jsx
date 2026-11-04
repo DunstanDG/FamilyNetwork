@@ -9,7 +9,10 @@ import { notifyChanged } from '../hooks.js';
 import MentionTextarea from './MentionTextarea.jsx';
 import Reactions from './Reactions.jsx';
 import Thread, { PendingNote } from './Thread.jsx';
-import { Body, Message, PersonAvatar } from './ui.jsx';
+import { Body, Ico, Menu, Message, PersonAvatar } from './ui.jsx';
+import { CalendarDays, Headphones, Images, MessageCircle, Newspaper, Pencil, Pin, PinOff, PlaySquare, Trash2 } from 'lucide-react';
+
+const KIND_ICON = { photo_album: Images, podcast_episode: Headphones, video: PlaySquare, link: Newspaper, event: CalendarDays };
 import { DigestBlock, EpisodeBlock, LinkPreview, SourceFace, VideoBlock } from './cards.jsx';
 import { AlbumBlock } from './Photos.jsx';
 import { EventBlock } from './Calendar.jsx';
@@ -86,22 +89,21 @@ export default function PostCard({ post, highlight = false }) {
         {system ? <SourceFace post={post} /> : <PersonAvatar person={author} />}
         <div className="post-who">
           <strong>{name}</strong>
-          <span className="when">
+          <span className="when meta">
             {pending ? 'Sending…' : ago(post.created_at)}
             {post.edited_at ? ' · edited' : ''}
-            {post.kind !== 'update' && post.kind !== 'digest' ? ` · ${KIND_LABEL[post.kind]}` : ''}
+            {KIND_ICON[post.kind] && (
+              <span className="kind-tag">· <Ico as={KIND_ICON[post.kind]} size={14} />{KIND_LABEL[post.kind]}</span>
+            )}
           </span>
         </div>
-        {post.pinned && <span className="badge">📌 Pinned</span>}
+        {post.pinned && <span className="badge brand"><Ico as={Pin} size={13} />Pinned</span>}
         {canChange && (
-          <details className="menu">
-            <summary aria-label="More options">⋯</summary>
-            <div className="menu-list">
-              {mine && canEdit(post.created_at) && <button onClick={() => { setEditing(true); setDraft(post.body); }}>Edit</button>}
-              {admin && <button onClick={togglePin}>{post.pinned ? 'Unpin' : 'Pin to top'}</button>}
-              {(mine || admin) && <button className="danger" onClick={remove}>Delete</button>}
-            </div>
-          </details>
+          <Menu>
+            {mine && canEdit(post.created_at) && <button onClick={() => { setEditing(true); setDraft(post.body); }}><Ico as={Pencil} size={18} />Edit</button>}
+            {admin && <button onClick={togglePin}><Ico as={post.pinned ? PinOff : Pin} size={18} />{post.pinned ? 'Unpin' : 'Pin to top'}</button>}
+            {(mine || admin) && <button className="danger" onClick={remove}><Ico as={Trash2} size={18} />Delete</button>}
+          </Menu>
         )}
       </header>
 
@@ -127,7 +129,7 @@ export default function PostCard({ post, highlight = false }) {
           <div className="post-actions">
             <Reactions rows={post.reactions} postId={post.id} />
             <button className="mini" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-              💬 {replyCount === 0 ? 'Reply' : open ? 'Hide replies' : `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
+              <Ico as={MessageCircle} size={19} />{replyCount === 0 ? 'Reply' : open ? 'Hide replies' : `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
             </button>
           </div>
           {open && <Thread post={post} />}
