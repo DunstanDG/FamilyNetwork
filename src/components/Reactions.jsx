@@ -3,6 +3,8 @@ import { useAuth } from '../auth.jsx';
 import { addReaction, removeReaction } from '../data.js';
 import { summariseReactions } from '../lib/timeline.js';
 import { notifyChanged } from '../hooks.js';
+import { SmilePlus, X } from 'lucide-react';
+import { Ico } from './ui.jsx';
 
 // One row of reaction buttons, used under posts and under replies alike. Taps show instantly and are
 // confirmed (or undone) once the server answers.
@@ -50,7 +52,7 @@ export default function Reactions({ rows, postId, commentId, compact = false }) 
       ))}
       {compact && (
         <button type="button" className="react add" aria-expanded={picking} aria-label={picking ? 'Hide reactions' : 'Add a reaction'} onClick={() => setPicking((p) => !p)}>
-          {picking ? '✕' : '☺+'}
+          <Ico as={picking ? X : SmilePlus} size={17} />
         </button>
       )}
       {error && <span className="react-error" role="alert">{error}</span>}

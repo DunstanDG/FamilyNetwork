@@ -5,7 +5,8 @@ import { fetchSources, followSource, lookup, unfollowSource } from '../data.js';
 import { normaliseLink } from '../lib/timeline.js';
 import { safeImage, youtubeChannelRef } from '../lib/links.js';
 import { ago } from '../lib/time.js';
-import { Message, Sheet } from './ui.jsx';
+import { Ico, Message, Sheet } from './ui.jsx';
+import { Headphones, PlaySquare, Search } from 'lucide-react';
 
 const WORDS = {
   podcast: {
@@ -22,7 +23,7 @@ const WORDS = {
 
 function Face({ image, kind }) {
   const src = safeImage(image);
-  return src ? <img className="source-face" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="source-face" aria-hidden="true">{kind === 'youtube' ? '▶️' : '🎧'}</span>;
+  return src ? <img className="source-face" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="source-face"><Ico as={kind === 'youtube' ? PlaySquare : Headphones} size={24} /></span>;
 }
 
 export function useSources(kind) {

@@ -3,6 +3,8 @@ import { savePlayback } from './data.js';
 import { get, set } from './lib/idb.js';
 import { clock, resumeAt } from './lib/media.js';
 import { safeImage } from './lib/links.js';
+import { Headphones, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-react';
+import { Ico } from './components/ui.jsx';
 
 const Ctx = createContext(null);
 export const usePlayer = () => useContext(Ctx);
@@ -134,7 +136,7 @@ export function MiniPlayer() {
   const { current, playing, time } = p;
   return (
     <section className="mini-player" aria-label="Now playing">
-      {current.image ? <img src={current.image} alt="" className="mp-art" /> : <span className="mp-art" aria-hidden="true">🎧</span>}
+      {current.image ? <img src={current.image} alt="" className="mp-art" /> : <span className="mp-art"><Ico as={Headphones} size={24} /></span>}
       <div className="mp-main">
         <p className="mp-title">{current.title}</p>
         <div className="mp-bar">
@@ -148,10 +150,10 @@ export function MiniPlayer() {
         {p.error && <p className="mp-error" role="alert">{p.error}</p>}
       </div>
       <div className="mp-controls">
-        <button className="mp-btn" onClick={() => p.skip(-15)} aria-label="Back 15 seconds">↺15</button>
-        <button className="mp-btn big" onClick={p.toggle} aria-label={playing ? 'Pause' : 'Play'}>{playing ? '❚❚' : '▶'}</button>
-        <button className="mp-btn" onClick={() => p.skip(30)} aria-label="Forward 30 seconds">30↻</button>
-        <button className="mp-btn" onClick={p.close} aria-label="Stop and close player">✕</button>
+        <button className="mp-btn" onClick={() => p.skip(-15)} aria-label="Back 15 seconds"><Ico as={RotateCcw} size={26} stroke={1.8} /><small>15</small></button>
+        <button className="mp-btn big" onClick={p.toggle} aria-label={playing ? 'Pause' : 'Play'}><Ico as={playing ? Pause : Play} size={22} className="filled" /></button>
+        <button className="mp-btn" onClick={() => p.skip(30)} aria-label="Forward 30 seconds"><Ico as={RotateCw} size={26} stroke={1.8} /><small>30</small></button>
+        <button className="mp-btn" onClick={p.close} aria-label="Stop and close player"><Ico as={X} size={20} /></button>
       </div>
     </section>
   );

@@ -3,7 +3,10 @@ import { useAuth } from '../auth.jsx';
 import { useInstallPrompt } from '../hooks.js';
 import { enablePush, isIos, isStandalone, pushSupported } from '../push.js';
 import ModuleToggles from './NotificationSettings.jsx';
-import { Message } from './ui.jsx';
+import { Ico, Message } from './ui.jsx';
+import { BellRing, PartyPopper, Smartphone } from 'lucide-react';
+
+const STEP_ICON = { install: Smartphone, alerts: BellRing, done: PartyPopper };
 
 const VAPID = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -45,7 +48,11 @@ export default function Onboarding({ onDone }) {
   return (
     <div className="scrim onboarding" role="dialog" aria-modal="true" aria-label="Welcome">
       <div className="sheet">
-        <p className="step-count">Step {i + 1} of {steps.length}</p>
+        <div className="step-count">
+          <span className="step-dots" aria-hidden="true">{steps.map((st, n) => <span key={st} className={n <= i ? 'on' : ''} />)}</span>
+          Step {i + 1} of {steps.length}
+        </div>
+        <div className="step-icon"><Ico as={STEP_ICON[step]} size={30} /></div>
 
         {step === 'install' && ios && (
           <>

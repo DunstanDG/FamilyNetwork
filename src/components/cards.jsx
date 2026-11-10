@@ -5,6 +5,8 @@ import { openPost } from '../hooks.js';
 import { dayLabel, length, progressLabel } from '../lib/media.js';
 import { normaliseLink } from '../lib/timeline.js';
 import { safeImage, youtubeEmbed, youtubeThumb } from '../lib/links.js';
+import { Globe, Headphones, Inbox, Pause, Play, PlaySquare } from 'lucide-react';
+import { Ico } from './ui.jsx';
 
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
 
@@ -18,7 +20,7 @@ export function LinkPreview({ url, preview }) {
     <a className={`linkcard ${image ? 'has-image' : ''}`} href={safe} target="_blank" rel="noopener noreferrer">
       {image && <img className="linkcard-img" src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
       <span className="linkcard-text">
-        <span className="linkcard-host">{preview?.title ? site : `🔗 ${site}`}</span>
+        <span className="linkcard-host"><Ico as={Globe} size={13} />{site}</span>
         {preview?.title && <span className="linkcard-title">{preview.title}</span>}
         {preview?.description && <span className="linkcard-desc">{preview.description}</span>}
         {!preview?.title && <span className="linkcard-url">{safe}</span>}
@@ -45,7 +47,7 @@ export function VideoBlock({ payload }) {
         ) : (
           <button className="video-poster" onClick={() => setOn(true)} aria-label={`Play ${title || 'video'}`}>
             <img src={safeImage(payload?.image) || youtubeThumb(id)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-            <span className="play-badge" aria-hidden="true">▶</span>
+            <span className="play-badge"><Ico as={Play} size={30} stroke={0} className="filled" /></span>
           </button>
         )}
       </div>
@@ -69,7 +71,8 @@ function PlayButton({ post, compact = false }) {
       onClick={() => (playingThis ? player.toggle() : player.play(post))}
       aria-label={playingThis && player.playing ? 'Pause' : `Play ${post.payload?.title || 'episode'}`}
     >
-      {playingThis && player.playing ? '❚❚' : '▶'}{!compact && (playingThis && player.playing ? ' Pause' : ' Play')}
+      <Ico as={playingThis && player.playing ? Pause : Play} size={compact ? 20 : 18} className="filled" />
+      {!compact && (playingThis && player.playing ? 'Pause' : 'Play')}
     </button>
   );
 }
@@ -85,7 +88,7 @@ export function EpisodeBlock({ post }) {
   return (
     <div className="episode">
       <div className="episode-row">
-        {image ? <img className="episode-art" src={image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="episode-art" aria-hidden="true">🎧</span>}
+        {image ? <img className="episode-art" src={image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="episode-art"><Ico as={Headphones} size={30} /></span>}
         <div className="episode-text">
           {title && <strong>{title}</strong>}
           <span className="when">{[show, length(p.duration_seconds), where].filter(Boolean).join(' · ')}</span>
@@ -114,7 +117,7 @@ export function DigestBlock({ post }) {
   const items = post.items || [];
   return (
     <div className="digest">
-      <p className="digest-day">{dayLabel(post.payload?.day)}</p>
+      <div className="digest-head"><span className="badge brand">{dayLabel(post.payload?.day)}</span><span className="when">{items.length} new</span></div>
       {items.length === 0 && <p className="hint">Nothing new yet.</p>}
       <ul className="plain digest-list">
         {items.map((it) => {
@@ -128,7 +131,7 @@ export function DigestBlock({ post }) {
               <button className="digest-open" onClick={() => openPost(it.id)}>
                 {image
                   ? <img className={`digest-art ${it.kind === 'video' ? 'wide' : ''}`} src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                  : <span className="digest-art" aria-hidden="true">{it.kind === 'video' ? '▶️' : '🎧'}</span>}
+                  : <span className="digest-art"><Ico as={it.kind === 'video' ? PlaySquare : Headphones} size={24} /></span>}
                 <span className="digest-text">
                   <strong>{p.title || 'Untitled'}</strong>
                   <small>{meta}{replies ? ` · 💬 ${replies}` : ''}</small>
@@ -148,6 +151,6 @@ export function SourceFace({ post, size = 44 }) {
   const image = safeImage(post.payload?.source_image || (post.kind === 'podcast_episode' ? post.payload?.image : null));
   const style = { width: size, height: size };
   if (image) return <img className="avatar source" style={style} src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />;
-  const icon = post.kind === 'video' ? '▶️' : post.kind === 'digest' ? '📬' : '🎧';
-  return <span className="avatar source icon" style={{ ...style, fontSize: size * 0.5 }} aria-hidden="true">{icon}</span>;
+  const icon = post.kind === 'video' ? PlaySquare : post.kind === 'digest' ? Inbox : Headphones;
+  return <span className="avatar source icon" style={style} aria-hidden="true"><Ico as={icon} size={Math.round(size * 0.5)} /></span>;
 }

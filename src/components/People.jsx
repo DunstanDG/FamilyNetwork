@@ -3,7 +3,8 @@ import { useAuth } from '../auth.jsx';
 import { useMembers } from '../members.jsx';
 import { appUrl } from '../supabase.js';
 import { createHousehold, createInvite, deleteInvite, fetchInvites, linkHomequest, removeMember, updateMember } from '../data.js';
-import { Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Ico, Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Check, ChevronDown, Copy, MessageCircle, Share2, UserPlus } from 'lucide-react';
 
 const ROLE_LABEL = { admin: 'Admin', adult: 'Adult', child: 'Child' };
 const inviteLink = (code) => `${appUrl()}?invite=${code}`;
@@ -21,9 +22,9 @@ function InviteLink({ link, name }) {
     <div className="invite">
       <input className="field" readOnly value={link} aria-label="Invite link" onFocus={(e) => e.target.select()} />
       <div className="row wrap">
-        <button className="mini" onClick={copy}>{copied ? 'Copied ✓' : 'Copy link'}</button>
-        <a className="mini" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>
-        {navigator.share && <button className="mini" onClick={() => navigator.share({ text, url: link }).catch(() => {})}>Share…</button>}
+        <button className="mini" onClick={copy}><Ico as={copied ? Check : Copy} size={18} />{copied ? 'Copied' : 'Copy link'}</button>
+        <a className="mini" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer"><Ico as={MessageCircle} size={18} />Send on WhatsApp</a>
+        {navigator.share && <button className="mini" onClick={() => navigator.share({ text, url: link }).catch(() => {})}><Ico as={Share2} size={18} />Share…</button>}
       </div>
     </div>
   );
@@ -89,7 +90,7 @@ function Invites({ onChange }) {
             </select>
           </div>
         </div>
-        <button className="primary wide" disabled={busy}>Create invite link</button>
+        <button className="primary wide" disabled={busy}><Ico as={UserPlus} />Create invite link</button>
       </form>
       <Message tone="error">{error}</Message>
       {fresh && <InviteLink link={inviteLink(fresh.code)} name={fresh.forName} />}
@@ -97,7 +98,7 @@ function Invites({ onChange }) {
       {list.filter((i) => i.code !== fresh?.code).length > 0 && (
         <>
           <h4>Waiting to be used</h4>
-          <ul className="plain">
+          <ul className="group">
             {list.filter((i) => i.code !== fresh?.code).map((i) => (
               <li key={i.code} className="person-row">
                 <div className="grow">
@@ -142,20 +143,24 @@ function MemberRow({ member, admin, isMe, households, onChanged }) {
         <PersonAvatar person={member} size={40} />
         <div className="grow">
           <strong>{member.display_name}{isMe ? ' (you)' : ''}</strong>
-          <small>{ROLE_LABEL[member.role]}{houseName ? ` · ${houseName}` : ' · Extended family'}</small>
+          <small>{houseName || 'Extended family'}</small>
         </div>
+        {member.role !== 'adult' && <span className={`badge ${member.role === 'admin' ? 'brand' : 'accent'}`}>{ROLE_LABEL[member.role]}</span>}
       </div>
       {admin && (
-        <div className="row wrap admin-row">
-          <select className="field" aria-label={`Role for ${member.display_name}`} value={member.role} onChange={(e) => change(e.target.value, member.household_id)}>
-            <option value="adult">Adult</option><option value="child">Child</option><option value="admin">Admin</option>
-          </select>
-          <select className="field" aria-label={`Household for ${member.display_name}`} value={member.household_id || ''} onChange={(e) => change(member.role, e.target.value)}>
-            <option value="">Extended family</option>
-            {households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-          <button className="mini danger" onClick={remove}>Remove</button>
-        </div>
+        <details className="manage">
+          <summary>Manage <Ico as={ChevronDown} size={15} /></summary>
+          <div className="row wrap admin-row">
+            <select className="field" aria-label={`Role for ${member.display_name}`} value={member.role} onChange={(e) => change(e.target.value, member.household_id)}>
+              <option value="adult">Adult</option><option value="child">Child</option><option value="admin">Admin</option>
+            </select>
+            <select className="field" aria-label={`Household for ${member.display_name}`} value={member.household_id || ''} onChange={(e) => change(member.role, e.target.value)}>
+              <option value="">Extended family</option>
+              {households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+            <button className="mini danger" onClick={remove}>Remove</button>
+          </div>
+        </details>
       )}
       <Message tone="error">{error}</Message>
     </li>
@@ -179,7 +184,8 @@ export default function People({ onClose }) {
 
   return (
     <Sheet title="Our family" onClose={onClose}>
-      <ul className="plain">
+      <h4>{members.length} {members.length === 1 ? 'person' : 'people'}</h4>
+      <ul className="group">
         {members.map((m) => (
           <MemberRow key={m.id} member={m} admin={admin} isMe={m.id === profile.id} households={households} onChanged={reload} />
         ))}
@@ -197,7 +203,8 @@ export default function People({ onClose }) {
                 <label className="toggle">
                   <input type="checkbox" checked={Boolean(h.homequest_linked)} onChange={async (e) => {
                     const { error: err } = await linkHomequest(h.id, e.target.checked);
-                    setError(err ? err.message : ''); reload();
+                    setError(!err ? '' : err.code === '23505' ? 'Only one household can use HomeQuest. Untick the other one first.' : err.message);
+                    reload();
                   }} />
                   <span>{h.name} uses HomeQuest</span>
                 </label>

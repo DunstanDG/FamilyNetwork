@@ -14,7 +14,10 @@ import Onboarding from './components/Onboarding.jsx';
 import People from './components/People.jsx';
 import Settings from './components/Settings.jsx';
 import { NotificationsSheet, PostSheet } from './components/Alerts.jsx';
-import { PersonAvatar, Sheet } from './components/ui.jsx';
+import { Ico, PersonAvatar, Sheet } from './components/ui.jsx';
+import { Bell, CalendarDays, Headphones, House, Images, Newspaper, PlaySquare, Users, WifiOff } from 'lucide-react';
+
+const TAB_ICONS = { home: House, photos: Images, podcasts: Headphones, videos: PlaySquare, news: Newspaper, calendar: CalendarDays };
 import Composer from './components/Composer.jsx';
 
 const TAB_KEY = 'fn-tab';
@@ -72,19 +75,22 @@ function Shell() {
   return (
     <>
       <header className="top">
-        <h1>Family Network</h1>
+        <div className="brand-mark">
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
+          <h1>Family Network</h1>
+        </div>
         <div className="top-actions">
           <button className="icon-btn" onClick={() => setSheet('alerts')} aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'}>
-            🔔{unread > 0 && <span className="dot" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>}
+            <Ico as={Bell} size={22} />{unread > 0 && <span className="dot" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>}
           </button>
-          <button className="icon-btn" onClick={() => setSheet('people')} aria-label="Our family">👪</button>
+          <button className="icon-btn" onClick={() => setSheet('people')} aria-label="Our family"><Ico as={Users} size={22} /></button>
           <button className="icon-btn me-btn" onClick={() => setSheet('settings')} aria-label="Your settings">
-            <PersonAvatar person={profile} size={40} />
+            <PersonAvatar person={profile} size={36} />
           </button>
         </div>
       </header>
 
-      {!online && <p className="offline" role="status">You’re offline. You can still read, and anything you write will send when you’re back.</p>}
+      {!online && <p className="offline" role="status"><Ico as={WifiOff} size={18} />You’re offline. You can still read, and anything you write will send when you’re back.</p>}
 
       <main className="page">
         <Feed key={module.id} module={module} />
@@ -95,7 +101,7 @@ function Shell() {
       <nav className="tabs" aria-label="Sections">
         {MODULES.map((m) => (
           <button key={m.id} className={m.id === tab ? 'on' : ''} aria-current={m.id === tab ? 'page' : undefined} onClick={() => choose(m.id)}>
-            <span className="tab-icon" aria-hidden="true">{m.icon}</span>
+            <span className="tab-icon"><Ico as={TAB_ICONS[m.id]} size={22} stroke={m.id === tab ? 2.3 : 2} /></span>
             <span>{m.label}</span>
           </button>
         ))}

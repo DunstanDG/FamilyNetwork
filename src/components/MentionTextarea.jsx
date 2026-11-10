@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth.jsx';
 import { useMembers } from '../members.jsx';
 import { activeMention, applyMention, suggestMembers } from '../lib/mentions.js';
@@ -13,6 +13,14 @@ export default function MentionTextarea({ value, onChange, onSubmit, placeholder
   const [caret, setCaret] = useState(0);
   const [index, setIndex] = useState(0);
   const [dismissed, setDismissed] = useState(null);
+
+  // Grow with the text (up to about ten lines), so a one-line box never hides what you've written.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight + 2, 280)}px`;
+  }, [value]);
 
   const active = activeMention(value, caret);
   const options = active && dismissed !== active.start ? suggestMembers(active.query, members, profile.id) : [];

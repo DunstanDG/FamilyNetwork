@@ -27,7 +27,7 @@ export function scoreEvent(options = [], organiserId) {
   const placeScores = places.map((o) => {
     const votes = o.votes || [];
     const mine = votes.find((v) => v.user_id === organiserId);
-    return { id: o.id, score: votes.reduce((s, v) => s + (n - v.rank + 1), 0), organiser: mine ? mine.rank : null, position: o.position };
+    return { id: o.id, score: votes.reduce((s, v) => s + Math.max(0, n - v.rank + 1), 0), organiser: mine ? mine.rank : null, position: o.position };
   });
   const bestSlot = [...slotScores].sort((a, b) => b.score - a.score
     || (b.organiser ?? -1) - (a.organiser ?? -1)
