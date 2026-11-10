@@ -3,7 +3,8 @@ import { fetchNotifications, fetchPost, markAllRead } from '../data.js';
 import { ago } from '../lib/time.js';
 import { useOnChanged } from '../hooks.js';
 import PostCard from './PostCard.jsx';
-import { PersonAvatar, Sheet } from './ui.jsx';
+import { Empty, Ico, PersonAvatar, Sheet, SkeletonPosts } from './ui.jsx';
+import { BellRing, CalendarDays, Images } from 'lucide-react';
 
 const WHAT = {
   mention: 'mentioned you',
@@ -13,7 +14,7 @@ const WHAT = {
   event: 'updated an event',
 };
 // Notifications with nobody behind them: the calendar deciding by itself, or a reminder.
-const SYSTEM = { event: '📅 Family plans', vote: '📅 Family plans', album: '📷 New photos' };
+const SYSTEM = { event: 'Family plans', vote: 'Family plans', album: 'New photos' };
 
 export function NotificationsSheet({ onClose, onOpenPost, onRead }) {
   const [items, setItems] = useState(null);
@@ -33,13 +34,13 @@ export function NotificationsSheet({ onClose, onOpenPost, onRead }) {
 
   return (
     <Sheet title="Notifications" onClose={onClose}>
-      {items === null && <p className="notice">Loading…</p>}
-      {items?.length === 0 && <p className="notice">Nothing yet. You’ll see mentions, replies, new photos and plans here.</p>}
+      {items === null && <div style={{ marginTop: 12 }}><SkeletonPosts count={2} /></div>}
+      {items?.length === 0 && <div style={{ marginTop: 12 }}><Empty icon={BellRing} title="You’re all caught up">Mentions, replies, new photos and plans will appear here.</Empty></div>}
       <ul className="plain">
         {items?.map((n) => (
           <li key={n.id}>
             <button className={`alert-row ${n.read_at ? '' : 'unread'}`} onClick={() => onOpenPost(n.post_id)}>
-              <PersonAvatar person={n.actor || { id: 'system', display_name: '📅' }} size={40} />
+              {n.actor ? <PersonAvatar person={n.actor} size={40} /> : <span className="avatar source icon" style={{ width: 40, height: 40 }}><Ico as={n.kind === 'album' ? Images : CalendarDays} size={20} /></span>}
               <span className="grow">
                 {n.actor ? <><strong>{n.actor.display_name}</strong> {WHAT[n.kind] || 'did something'}</> : <strong>{SYSTEM[n.kind] || 'Family Network'}</strong>}
                 {n.snippet && <small>“{n.snippet}”</small>}

@@ -4,7 +4,8 @@ import { useInstallPrompt } from '../hooks.js';
 import { disablePush, enablePush, isIos, isStandalone, pushState } from '../push.js';
 import ModuleToggles from './NotificationSettings.jsx';
 import { downloadMyPhotos, photosConfigured } from '../photos.js';
-import { Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Ico, Message, PersonAvatar, Sheet } from './ui.jsx';
+import { Download, LogOut, Smartphone } from 'lucide-react';
 
 export function PushControls() {
   const { profile, updateProfile } = useAuth();
@@ -63,7 +64,7 @@ function MyPhotos() {
     <>
       <h3>Your photos</h3>
       <p className="hint">Download every photo you’ve shared, as the original files, in one zip.</p>
-      <button className="mini wide" onClick={go} disabled={state.busy}>⤓ Download my photos</button>
+      <button className="mini wide" onClick={go} disabled={state.busy}><Ico as={Download} />Download my photos</button>
       <Message>{state.note}</Message>
     </>
   );
@@ -107,7 +108,7 @@ export default function Settings({ onClose }) {
         <>
           <h3>Install</h3>
           {canInstall
-            ? <button className="mini wide" onClick={install}>Add Family Network to this device</button>
+            ? <button className="mini wide" onClick={install}><Ico as={Smartphone} />Add Family Network to this device</button>
             : <p className="hint">{isIos()
               ? 'Tap Share, then “Add to Home Screen”.'
               : 'Use your browser’s menu and choose “Install app” or “Add to Home screen”.'}</p>}
@@ -116,7 +117,7 @@ export default function Settings({ onClose }) {
 
       {photosConfigured && <MyPhotos />}
 
-      <button className="mini wide signout" onClick={signOut}>Sign out</button>
+      <button className="mini wide signout danger" onClick={signOut}><Ico as={LogOut} />Sign out</button>
     </Sheet>
   );
 }

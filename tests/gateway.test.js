@@ -219,3 +219,10 @@ describe('gateway', () => {
     expect(calls.some((c) => c.startsWith('DELETE sb.test/rest/v1/photo_deletions'))).toBe(true);
   });
 });
+
+describe('gateway configuration', () => {
+  it('refuses to start with a wildcard origin', () => {
+    expect(() => createGateway({ supabaseUrl: 'x', anonKey: 'x', serviceKey: 'x', immichUrl: 'x', immichKey: 'x', allowedOrigins: ['*'] }))
+      .toThrow(/never \*/);
+  });
+});
