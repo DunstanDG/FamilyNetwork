@@ -6,11 +6,12 @@ import { findUnreadDivider } from '../lib/timeline.js';
 import Composer from './Composer.jsx';
 import PostCard from './PostCard.jsx';
 import SourcesSheet from './Sources.jsx';
+import VideoSearch from './VideoSearch.jsx';
 import { NewAlbum } from './Photos.jsx';
 import { photosConfigured } from '../photos.js';
 import { ProposeEvent, Upcoming } from './Calendar.jsx';
 import { Empty, Ico, PageHead, SkeletonPosts } from './ui.jsx';
-import { CalendarDays, CalendarPlus, Headphones, ImagePlus, Images, Newspaper, PlaySquare, Rss, Sparkles } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Headphones, ImagePlus, Images, Newspaper, PlaySquare, Rss, Search, Sparkles } from 'lucide-react';
 
 const FILTERS = [
   { id: 'all', label: 'Everything', kind: null },
@@ -66,10 +67,12 @@ function Toolbar({ module }) {
       return (
         <>
           <PageHead title="Videos" sub="Worth watching: shared by the family, or new from channels we follow.">
+            <button className="primary" onClick={() => setSheet('search')}><Ico as={Search} />Search YouTube</button>
             <button className="mini" onClick={() => setSheet('youtube')}><Ico as={Rss} />Channels we follow</button>
           </PageHead>
           <Composer linkFirst linkHint="Paste a YouTube link" />
-          {sheet && <SourcesSheet kind="youtube" onClose={close} />}
+          {sheet === 'youtube' && <SourcesSheet kind="youtube" onClose={close} />}
+          {sheet === 'search' && <VideoSearch onClose={close} />}
         </>
       );
     case 'news':

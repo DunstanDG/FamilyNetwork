@@ -78,10 +78,10 @@ export const fetchSources = (kind) =>
 export const followSource = (row) => supabase.from('sources').insert(row);
 export const unfollowSource = async (id) => mustAffect(await supabase.from('sources').delete().eq('id', id).select('id'), 'unfollow');
 
-// Calls the `lookup` Edge Function. Resolves to { data } or { error: { message } }.
-export async function lookup(body) {
+// Calls an Edge Function. Resolves to { data } or { error: { message } }.
+async function callFunction(name, body) {
   try {
-    const { data, error } = await supabase.functions.invoke('lookup', { body });
+    const { data, error } = await supabase.functions.invoke(name, { body });
     if (error) {
       let message = error.message;
       try { message = (await error.context?.json())?.error || message; } catch { /* keep the generic one */ }
@@ -93,6 +93,21 @@ export async function lookup(body) {
     return { error: { message: e.message } };
   }
 }
+export const lookup = (body) => callFunction('lookup', body);
+
+// ---- YouTube search with channel verdicts ---------------------------------------------------------
+const VERDICT = 'channel_id, title, tier, reason, note, confidence, source';
+export const searchVideos = (q) => callFunction('yt-search', { action: 'search', q });
+export const fetchVerdicts = (channelIds) => supabase.from('yt_channels').select(VERDICT).in('channel_id', channelIds);
+// kind: 'play' | 'like' | 'dislike'. A dislike also puts the channel in front of an admin.
+export const logVideo = (kind, video) =>
+  supabase.from('yt_activity').insert({ kind, video_id: video.video_id, channel_id: video.channel_id });
+export const fetchReviews = () =>
+  supabase.from('yt_reviews').select(`id, channel_id, video_id, why, created_at, channel:yt_channels(${VERDICT})`)
+    .is('resolved_at', null).order('created_at').limit(50);
+// Admins only: trusted | caution | blocked. Settles anything waiting on that channel.
+export const setChannelTier = async (channelId, tier) =>
+  mustAffect(await supabase.from('yt_channels').update({ tier }).eq('channel_id', channelId).select('channel_id'), 'change');
 
 export const savePlayback = ({ postId, position, duration, finished }) =>
   supabase.from('playback').upsert({

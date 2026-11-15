@@ -632,3 +632,36 @@ body.has-player { padding-bottom: calc(var(--tabs-h) + 104px + env(safe-area-ins
 .comment-actions .linkish.danger { color: var(--muted); }
 .comment-actions .linkish.danger:hover { color: var(--danger); background: var(--danger-soft); }
 .composer-actions > .row { flex: 1 1 auto; min-width: 0; }
+
+/* ---- YouTube search: results with a verdict on each channel ----------------------------------- */
+.yt-results { margin-top: 14px; }
+.yt-results > li + li { border-top: 1px solid var(--line); }
+.yt-card {
+  display: flex; gap: 12px; align-items: flex-start; width: 100%; padding: 12px 6px; border: 0; background: transparent;
+  color: inherit; text-align: left; border-radius: var(--r); font: inherit;
+}
+.yt-card:hover, .yt-card.on { background: var(--surface-2); }
+.yt-card .grow { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; }
+.yt-card strong { font-weight: 700; line-height: 1.3; }
+.yt-card small, .review-row small { color: var(--muted); font-size: .86rem; }
+.yt-thumb { position: relative; flex: none; width: 132px; aspect-ratio: 16 / 9; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-3); }
+.yt-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yt-length {
+  position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 6px; background: rgb(0 0 0 / .78); color: #fff;
+  font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.yt-gone { padding: 12px 6px; }
+.yt-player { margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); scroll-margin-top: 64px; }
+.flags { display: flex; flex-direction: column; gap: 4px; margin: 8px 2px 12px; }
+.flag { display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; font-weight: 650; color: var(--muted); line-height: 1.3; }
+.flag svg { flex: none; }
+.flag.ok { color: var(--ok); }
+.flag.warn { color: var(--accent); background: var(--accent-soft); border-radius: var(--r-sm); padding: 4px 8px; align-self: flex-start; }
+.flag.gone { color: var(--muted); font-weight: 600; }
+.review-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0; }
+.review-row + .review-row { border-top: 1px solid var(--line); }
+.review-row .grow { display: flex; flex-direction: column; gap: 3px; }
+.spin { animation: spin 1.1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+@media (max-width: 420px) { .yt-thumb { width: 108px; } }

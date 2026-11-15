@@ -34,6 +34,9 @@ const posts = [
 ];
 const day = (d, h = 13) => { const t = new Date(); t.setUTCDate(t.getUTCDate() + d); t.setUTCHours(h, 0, 0, 0); return t.toISOString(); };
 const VID = 'dQw4w9WgXcQ';
+const YT_GOOD = 'UCgoodgoodgoodgoodgood01';
+const YT_NEW = 'UCnewnewnewnewnewnewnew1';
+const YT_BAIT = 'UCbaitbaitbaitbaitbait01';
 const base = (o) => ({ mentions: [], pinned: false, edited_at: null, digest_id: null, reactions: [], comments: [], playback: [], photos: [], event: null, ...o });
 posts.forEach((p, i) => { posts[i] = base(p); });
 posts.push(
@@ -104,6 +107,25 @@ async function handle(route) {
     const b = body(); log.push({ m: 'lookup', b });
     if (b.action === 'preview') return json(route, { title: 'A classic', site: 'Rick', image: `https://i.ytimg.com/vi/${VID}/hqdefault.jpg`, video_id: VID });
     return json(route, { shows: [] });
+  }
+  if (path === '/functions/v1/yt-search') {
+    const b = body(); log.push({ m: 'yt-search', b });
+    return json(route, { cached: false, hidden: 1, results: [
+      { video_id: 'aaaaaaaaaa1', title: 'Pruning roses in autumn', channel_id: YT_GOOD, channel_title: 'Garden Hour', published_at: ago(60 * 24 * 3), duration_seconds: 605, synthetic: false, tier: 'trusted', reason: 'followed' },
+      { video_id: 'aaaaaaaaaa2', title: 'Roses: the SECRET they hide', channel_id: YT_NEW, channel_title: 'Rose Facts Daily', published_at: ago(600), duration_seconds: 481, synthetic: true, tier: 'checking', reason: '' },
+      { video_id: 'aaaaaaaaaa3', title: 'You won’t BELIEVE this rose', channel_id: YT_BAIT, channel_title: 'Wow Gardens', published_at: ago(900), duration_seconds: 62, synthetic: false, tier: 'caution', reason: 'clickbait' },
+    ] });
+  }
+  if (path === '/rest/v1/yt_channels' && method === 'GET') {
+    // The check has finished by the time the app asks again.
+    return json(route, [{ channel_id: YT_NEW, title: 'Rose Facts Daily', tier: 'blocked', reason: 'ai_generated', note: 'Synthetic narration', confidence: 0.95, source: 'model' }]);
+  }
+  if (path === '/rest/v1/yt_channels' && method === 'PATCH') { log.push({ m: 'PATCH yt_channels', b: body(), q: q.get('channel_id') }); return json(route, [{ channel_id: YT_BAIT }]); }
+  if (path === '/rest/v1/yt_activity' && method === 'POST') { log.push({ m: 'POST yt_activity', b: body() }); return route.fulfill({ status: 201, headers: cors }); }
+  if (path === '/rest/v1/yt_reviews') {
+    const disliked = log.some((l) => l.m === 'POST yt_activity' && l.b.kind === 'dislike') && !log.some((l) => l.m === 'PATCH yt_channels');
+    return json(route, disliked ? [{ id: 1, channel_id: YT_BAIT, video_id: 'aaaaaaaaaa3', why: 'dislike', created_at: ago(1),
+      channel: { channel_id: YT_BAIT, title: 'Wow Gardens', tier: 'caution', reason: 'clickbait', note: 'Bait-and-switch titles', confidence: 0.8, source: 'model' } }] : []);
   }
   if (path === '/rest/v1/sources') return json(route, [{ id: 's1', kind: 'podcast', feed_url: 'https://pod.fake.test/rss', title: 'Garden Hour', image_url: null, added_by: JAN.id, created_at: ago(9000), failures: 0 }]);
   if (path === '/rest/v1/events') {
@@ -177,7 +199,8 @@ async function handle(route) {
     try { if ((await fetch(APP)).ok) break; } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 250));
   }
-  const browser = await chromium.launch();
+  // CHROME_PATH: use an installed Chrome instead of Playwright's own download.
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, serviceWorkers: 'block' });
   await context.route(`${HOST}/**`, handle);
   await context.route('https://photos.fake.test/**', (route) => {
@@ -328,6 +351,41 @@ async function handle(route) {
   check('a YouTube link is posted as a video with its id and title', shared?.b.kind === 'video' && shared.b.payload.video_id === VID && shared.b.payload.title === 'A classic', JSON.stringify(shared?.b));
   await page.getByRole('button', { name: /Channels we follow/ }).click();
   check('Videos tab offers following a channel', (await page.locator('.sheet h2').innerText()) === 'Channels we follow');
+  await page.keyboard.press('Escape');
+
+  // --- filtered YouTube search: everything shows at once, warnings arrive, nothing moves
+  await page.getByRole('button', { name: 'Search YouTube' }).click();
+  await page.locator('.sheet input[type=search]').fill('  Rose pruning ');
+  await page.locator('.sheet form button.primary').click();
+  await page.waitForSelector('.yt-card');
+  check('search goes to the function', log.some((l) => l.m === 'yt-search' && l.b.action === 'search' && l.b.q.trim() === 'Rose pruning'));
+  const cards = () => page.locator('.yt-results > li').allInnerTexts();
+  const first = await cards();
+  check('results show straight away, each with what is known about its channel', first.length === 3
+    && first[0].includes('A channel the family follows') && first[1].includes('Checking…') && first[2].includes('Sensational or clickbait style'), JSON.stringify(first));
+  check('a video its uploader declared as AI-made says so', first[1].includes('AI-made or altered'));
+  check('results left out for a blocked channel are counted', (await page.locator('.sheet').innerText()).includes('1 result was left out'));
+  await page.screenshot({ path: `${SHOTS}/2e-video-search.png` });
+  await page.waitForSelector('.yt-gone', { timeout: 9000 });
+  const later = await cards();
+  check('a channel found to be junk is replaced in place, and nothing else moves', later.length === 3
+    && later[0] === first[0] && later[1].trim() === 'Removed: likely AI-generated' && later[2] === first[2], JSON.stringify(later));
+  await page.locator('.yt-card').nth(1).click();
+  await page.waitForSelector('.yt-player iframe');
+  check('a result plays inside the app with its warning beside it', (await page.locator('.yt-player iframe').getAttribute('src')).startsWith('https://www.youtube-nocookie.com/embed/aaaaaaaaaa3')
+    && (await page.locator('.yt-player .flags').innerText()).includes('Sensational or clickbait style'));
+  for (let i = 0; i < 20 && !log.some((l) => l.m === 'POST yt_activity'); i += 1) await page.waitForTimeout(100);
+  check('the play is recorded', log.some((l) => l.m === 'POST yt_activity' && l.b.kind === 'play' && l.b.video_id === 'aaaaaaaaaa3' && l.b.channel_id === YT_BAIT));
+  await page.getByRole('button', { name: 'Not good' }).click();
+  await page.waitForSelector('.sheet .review-row');
+  check('a thumbs-down is recorded and reaches the admin’s list', log.some((l) => l.m === 'POST yt_activity' && l.b.kind === 'dislike')
+    && (await page.locator('.sheet .review-row').innerText()).includes('Wow Gardens'));
+  await page.locator('.sheet .review-row').getByRole('button', { name: 'Block' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.yt-gone').length === 2, null, { timeout: 5000 });
+  const patch = log.filter((l) => l.m === 'PATCH yt_channels').pop();
+  check('an admin can block the channel on the spot', patch?.b.tier === 'blocked' && patch.q === `eq.${YT_BAIT}` && Object.keys(patch.b).length === 1, JSON.stringify(patch));
+  check('and the review list empties', await page.locator('.sheet .review-row').count() === 0);
+  await page.screenshot({ path: `${SHOTS}/2f-video-search-admin.png` });
   await page.keyboard.press('Escape');
 
   await page.locator('.tabs button', { hasText: 'Podcasts' }).click();

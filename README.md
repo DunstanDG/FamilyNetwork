@@ -7,7 +7,7 @@ data and live updates, and photos kept on the family's own server.
 **Status: all four phases built.** Sign-in, invites and roles; a home timeline with a "since you last
 looked" line, replies, reactions and @mentions; push notifications; offline reading and writing;
 shared links, videos and podcast episodes with previews; followed shows and channels gathered into a
-daily "New from your shows" card; a podcast player that remembers where you were; the Android share
+daily "New from your shows" card; YouTube search with a warning on doubtful channels; a podcast player that remembers where you were; the Android share
 target and an iOS Shortcut; photo albums kept on the home server; and calendar voting that hands
 confirmed plans to HomeQuest for those who want it.
 
@@ -15,7 +15,7 @@ confirmed plans to HomeQuest for those who want it.
 
 | Area | Where | Notes |
 | --- | --- | --- |
-| Database, security rules | `supabase/migrations/0001…0005` | Own `family` schema, row-level security on every table. Run in order |
+| Database, security rules | `supabase/migrations/0001…0006` | Own `family` schema, row-level security on every table. Run in order |
 | First admin | `supabase/bootstrap_admin.sql` | Edit placeholders, run once |
 | Scheduled jobs | `supabase/schedule.sql` | Feed polling, closing votes, reminders (pg_cron) |
 | HomeQuest connection | `supabase/homequest_adapter.sql` | Template; edit for HomeQuest's tables when its schema is settled |
@@ -23,8 +23,9 @@ confirmed plans to HomeQuest for those who want it.
 | Push sender | `supabase/functions/send-push/` | Edge Function called by a database webhook |
 | Feed poller | `supabase/functions/poll-feeds/` | Edge Function called by pg_cron; ETags, quiet YouTube retries |
 | Lookups | `supabase/functions/lookup/` | Link previews, YouTube channel ids, Podcast Index search |
+| YouTube search | `supabase/functions/yt-search/` | Edge Function: YouTube Data API, quick rules, then Gemini judges each new channel |
 | Photo gateway | `gateway/` | Node container + Cloudflare Tunnel on the Proxmox box, in front of Immich |
-| Backups | `ops/backup/` | Nightly database dump, Immich copy to second disk and offsite, restore test |
+| Backups | `ops/backup/` | Nightly database dump, Immich copy to second disk and offsite, restore test, video activity export |
 | App | `src/` | React + Vite + vite-plugin-pwa (custom service worker in `src/sw.js`) |
 | Tests | `tests/` | Database rules on a real Postgres (PGlite); feed, preview, gateway and app logic; browser smoke test |
 
@@ -47,9 +48,9 @@ household), a relative who signs in could read that table through HomeQuest's AP
 
 ### 2. Database
 
-1. SQL editor: paste and run each file in `supabase/migrations/` in order (0001 to 0005). 0005 locks
-   down who can call which database function; always run it last.
-   0002 to 0005 are safe to run again. If one stops part-way (for example with "relation … already
+1. SQL editor: paste and run each file in `supabase/migrations/` in order (0001 to 0006). 0005 locks
+   down who can call which database function; 0006 (YouTube search) comes after it and grants only
+   its own. 0002 to 0006 are safe to run again. If one stops part-way (for example with "relation … already
    exists"), run that file again, then every file after it, in order: a later file sometimes updates
    something an earlier one created, so re-running only an earlier one would undo that.
 2. **Project Settings → Data API → Exposed schemas**: add `family` (keep `public` and `graphql_public`,
@@ -68,7 +69,7 @@ household), a relative who signs in could read that table through HomeQuest's AP
    `admin_remove_member`, `admin_update_member`, `cancel_event`, `cast_votes`, `confirm_event`,
    `household_busy`, `import_family_feed`, `is_admin`, `is_member`, `my_role`, `propose_event`,
    `publish_album`, `redeem_invite`, `register_push`, `rsvp`. Anything else (for example
-   `confirm_choice` or `homequest_sync`): run 0005 again.
+   `confirm_choice` or `homequest_sync`): run 0005 again, then 0006.
 4. Sign in to the app once (it will say you need an invite), then edit and run `supabase/bootstrap_admin.sql`
    to make yourself the first admin. Keep your edited copy out of the repo.
 
@@ -118,6 +119,32 @@ secret shows up there as a 403, not as an error anywhere else. Without Podcast I
 people can still follow a show by pasting its RSS link.
 
 To bring Family Feed across, follow `supabase/import_family_feed.sql` (export two CSVs, upload, run).
+
+### 5b. YouTube search
+
+Needs migration 0006, and two keys:
+
+- **YouTube Data API v3** key: in Google Cloud, enable *YouTube Data API v3* and create an API key
+  restricted to that API. The default allowance covers roughly 100 searches a day.
+- **Gemini API** key: the one HomeQuest uses works, but a second key in the same account keeps the two
+  apps' usage (and rate limits) apart.
+
+```bash
+supabase secrets set YOUTUBE_API_KEY=<key> GEMINI_API_KEY=<key>
+# Optional: GEMINI_MODEL=<a current Flash model>   (default gemini-3.6-flash; use whatever HomeQuest uses)
+#           YT_DAILY_SEARCHES=90                    (uncached searches a day before it says "try tomorrow")
+#           YT_LOG_SEARCHES=true                    (also record what people searched for; off by default)
+supabase functions deploy yt-search
+```
+
+Then run the new job 6 at the foot of `supabase/schedule.sql` (the nightly clear-down), and check
+**Database → Publications → supabase_realtime** lists `family.yt_channels` (0006 adds it). If Realtime
+is off the app still works: it asks for verdicts every four seconds instead.
+
+On the Proxmox box, add `RETENTION_DIR` to `/etc/family-backup.env` and schedule
+`ops/backup/export-video-activity.sh` nightly. It writes what was played and rated (JSON lines) for
+the data retention system, plus a snapshot of every verdict, and marks the rows as exported so
+Supabase can clear them a week later. The nightly `backup-db.sh` dump already includes the verdicts.
 
 ### 6. Photos (on the Proxmox box)
 
@@ -217,6 +244,17 @@ npm run test:e2e               # browser smoke test with a mocked backend
   day's "New from your shows" card on Home, and listed individually in Podcasts and Videos, where
   each takes replies and reactions. Failing feeds back off; YouTube's intermittent 404s are retried
   quietly.
+- **YouTube search.** *Videos → Search YouTube*. Every result shows at once. Channels the family
+  follows are trusted; channels seen before carry their verdict; new ones say "Checking…" while the
+  function looks them up (age, size, recent titles) and asks Gemini, usually a few seconds. Doubtful
+  channels get a plain-language warning (likely AI-generated, sensational, makes claims without
+  sources, new channel); only channels the model is sure are conspiracy, misleading or AI-generated
+  are hidden, with a stricter line for news and health. Results never reorder: a channel found to
+  be junk is replaced where it stands by one line. If a check fails, the result says "Not yet
+  checked" rather than looking clean, and the next search tries again. A video the uploader
+  declared as altered or synthetic says so. A thumbs-down, or an unsure check, puts the channel in a
+  list at the foot of the search sheet for admins, whose Trust / Take care / Block is final.
+  Searches are cached for a day; names from YouTube are dropped after 30 days unless seen again.
 - **Podcasts.** One player for the whole app (it keeps playing as you change tabs, with lock-screen
   controls). Your place is saved on the device at once and to your account every 15 seconds.
 - **Photos.** Albums, and single photos on updates. Uploads need a connection; thumbnails are kept on
@@ -250,6 +288,9 @@ npm run test:e2e               # browser smoke test with a mocked backend
   from the photo picker by default.
 - **Not built:** the optional weekly email digest, and everything in the spec's "Later" column
   (polls, memories, face search, Shorts filter, listening-now, recurring events, travel times).
+- **Not built for YouTube search:** sharing a search result to the family in one tap (copy the link
+  into the Videos box for now), a per-video check of the video itself, and a local-model fallback
+  on the home server when Gemini is unavailable (results say "Not yet checked" instead).
 
 ## Good to know
 
@@ -269,5 +310,6 @@ npm run test:e2e               # browser smoke test with a mocked backend
 The database rules, feed parsing, location stripping, gateway checks and the whole app (against a
 mocked backend) are tested here. These were written from the services' documentation and need a
 first real run: PostgREST's embedding of the new tables (`src/data.js`), the Immich upload and
-thumbnail API (`gateway/src/gateway.js`), the Podcast Index and YouTube lookups, and the
-`schedule.sql` jobs.
+thumbnail API (`gateway/src/gateway.js`), the Podcast Index and YouTube lookups, the
+`schedule.sql` jobs, and the whole of `yt-search` (the YouTube Data API calls, the Gemini request and
+model name, `EdgeRuntime.waitUntil`, and verdicts arriving over Realtime).
