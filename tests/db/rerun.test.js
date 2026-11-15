@@ -4,10 +4,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ADULT, actor, applyMigration, makeDb, seedPeople } from './helpers.js';
 
-const LATER = ['0002_feeds.sql', '0003_photos.sql', '0004_calendar.sql', '0005_hardening.sql'];
+const LATER = ['0002_feeds.sql', '0003_photos.sql', '0004_calendar.sql', '0005_hardening.sql', '0006_video_search.sql'];
 
 describe('re-running migrations', () => {
-  it('runs 0002-0005 a second time over a database with data in it', async () => {
+  it('runs 0002-0006 a second time over a database with data in it', async () => {
     const db = await makeDb();
     await seedPeople(db);
     const { as, rows, service } = actor(db);

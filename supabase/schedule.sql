@@ -47,6 +47,11 @@ select cron.schedule('family-tidy-notifications', '23 3 * * 0', $$
   delete from family.notifications where created_at < now() - interval '6 months';
 $$);
 
+-- 6. Filtered YouTube search: nightly clear-down. Drops expired search results, activity the home
+--    server has already exported (or anything over 90 days old), settled reviews and stale channel
+--    names. Channel verdicts are kept.
+select cron.schedule('family-yt-clear-down', '41 3 * * *', $$ select family.yt_clear_down(); $$);
+
 -- Check: select jobname, schedule, active from cron.job where jobname like 'family-%';
 -- After 15 minutes, check the feed job really reached the function (a wrong secret shows as 403):
 --   select status, return_message, start_time from cron.job_run_details order by start_time desc limit 10;
